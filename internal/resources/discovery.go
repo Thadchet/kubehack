@@ -24,6 +24,7 @@ type APIResource struct {
 	Resource   string `json:"resource"`
 	Kind       string `json:"kind"`
 	Namespaced bool   `json:"namespaced"`
+	Editable   bool   `json:"editable"`
 }
 
 // Discovery is the result of asking a cluster what it serves.
@@ -70,6 +71,8 @@ func Discover(ctx context.Context, config *rest.Config) (Discovery, error) {
 				Resource:   resource.Name,
 				Kind:       resource.Kind,
 				Namespaced: resource.Namespaced,
+				// Server-side apply is a patch request.
+				Editable: slices.Contains(resource.Verbs, "patch"),
 			})
 		}
 	}

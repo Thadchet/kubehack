@@ -13,6 +13,7 @@ interface Props {
   kindLabel: string;
   onClose: () => void;
   onOpenLogs?: () => void;
+  onEdit?: () => void;
 }
 
 type Fields = Record<string, unknown>;
@@ -174,7 +175,14 @@ function eventTime(event: KubeObject): string {
   return String(event.lastTimestamp ?? event.eventTime ?? event.metadata.creationTimestamp ?? "");
 }
 
-export function DetailPanel({ context, object, kindLabel, onClose, onOpenLogs }: Props) {
+export function DetailPanel({
+  context,
+  object,
+  kindLabel,
+  onClose,
+  onOpenLogs,
+  onEdit,
+}: Props) {
   const [tab, setTab] = useState<Tab>("overview");
   const yaml = useMemo(() => (tab === "yaml" ? stringify(object) : ""), [tab, object]);
 
@@ -184,11 +192,18 @@ export function DetailPanel({ context, object, kindLabel, onClose, onOpenLogs }:
         <div>
           <p className="muted">{kindLabel}</p>
           <h2 className="wrap">{object.metadata.name}</h2>
-          {onOpenLogs && (
-            <button type="button" className="action" onClick={onOpenLogs}>
-              View logs (l)
-            </button>
-          )}
+          <div className="detail-actions">
+            {onOpenLogs && (
+              <button type="button" className="action" onClick={onOpenLogs}>
+                View logs (l)
+              </button>
+            )}
+            {onEdit && (
+              <button type="button" className="action" onClick={onEdit}>
+                Edit (e)
+              </button>
+            )}
+          </div>
         </div>
         <button type="button" className="quiet" onClick={onClose} aria-label="Close details">
           ✕

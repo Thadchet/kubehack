@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { APIResource } from "../cluster/useCluster";
+import { EditDialog } from "../editor/EditDialog";
 import { columnsFor, hasPhase } from "./columns";
 import { DetailPanel } from "./DetailPanel";
 import { resourceId, resourceLabel } from "./kinds";
@@ -25,7 +26,10 @@ interface Props {
 function isTyping(target: EventTarget | null): boolean {
   return (
     target instanceof HTMLElement &&
-    (target.tagName === "INPUT" || target.tagName === "SELECT" || target.tagName === "TEXTAREA")
+    (target.isContentEditable ||
+      target.tagName === "INPUT" ||
+      target.tagName === "SELECT" ||
+      target.tagName === "TEXTAREA")
   );
 }
 
@@ -37,6 +41,7 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
   const [sort, setSort] = useState(defaultSort);
+  const [editing, setEditing] = useState<KubeObject>();
   const filterInput = useRef<HTMLInputElement>(null);
 
   const id = resourceId(resource);
@@ -51,6 +56,7 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
     setSelected(undefined);
     setFilter("");
     setSort(defaultSort);
+    setEditing(undefined);
   }, [context, id, scope]);
 
   const rows = useMemo(() => {
@@ -67,6 +73,9 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (editing) {
+        return;
+      }
       if (event.key === "Escape") {
         if (document.activeElement === filterInput.current) {
           setFilter("");
@@ -88,6 +97,10 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
         onOpenLogs(selectedObject);
         return;
       }
+      if (event.key === "e" && resource.editable && selectedObject) {
+        setEditing(selectedObject);
+        return;
+      }
       const step = { ArrowDown: 1, j: 1, ArrowUp: -1, k: -1 }[event.key];
       if (step && rows.length > 0) {
         event.preventDefault();
@@ -98,7 +111,7 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, selected, selectedObject, isPods, onOpenLogs]);
+  }, [rows, selected, selectedObject, isPods, onOpenLogs, editing, resource.editable]);
 
   const namespaceNames = useMemo(
     () => namespaces.items.map((item) => item.metadata.name).sort(),
@@ -206,6 +219,16 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
           kindLabel={resource.kind}
           onClose={() => setSelected(undefined)}
           onOpenLogs={isPods ? () => onOpenLogs(selectedObject) : undefined}
+          onEdit={resource.editable ? () => setEditing(selectedObject) : undefined}
+        />
+      )}
+
+      {editing && (
+        <EditDialog
+          context={context}
+          resource={resource}
+          object={editing}
+          onClose={() => setEditing(undefined)}
         />
       )}
     </div>

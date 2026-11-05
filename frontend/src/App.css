@@ -535,3 +535,95 @@
   background: var(--warn);
   color: var(--ground);
 }
+
+.detail-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.view {
+  position: relative;
+}
+
+.edit {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  background: var(--ground);
+}
+
+.edit-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+  flex: none;
+  padding: 10px 16px;
+}
+
+.edit-head h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.edit-target {
+  flex: none;
+}
+
+.edit-failure {
+  flex: none;
+  max-height: 40%;
+  overflow-y: auto;
+  padding: 8px 16px;
+  background: var(--raised);
+}
+
+.edit-failure p {
+  margin: 0 0 4px;
+}
+
+.edit-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.code-view {
+  height: 100%;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: none;
+  padding: 8px 16px;
+}
+
+.edit-actions button {
+  padding: 5px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.edit-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.edit-actions .primary {
+  border-color: transparent;
+  background: var(--raised);
+  font-weight: 600;
+}
+
+.edit-actions [data-testid="edit-apply"] {
+  color: var(--band-ink);
+}

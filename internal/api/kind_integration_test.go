@@ -18,6 +18,8 @@ import (
 	"time"
 
 	"github.com/coder/websocket"
+
+	"kubehack/internal/resources"
 )
 
 // These tests need a disposable cluster, and they create and delete objects:
@@ -337,4 +339,194 @@ func TestKindLogsFollowContainersAndPrevious(t *testing.T) {
 
 	previous := openKindLogs(t, server, "namespace=default&pod=kh-logs&container=crasher&previous=true")
 	readUntilLine(t, previous, "crash-output")
+}
+
+type kindApply struct {
+	t      *testing.T
+	server *Server
+}
+
+func (k kindApply) call(method, path string, body any, out any) int {
+	k.t.Helper()
+	var reader io.Reader
+	if body != nil {
+		encoded, err := json.Marshal(body)
+		if err != nil {
+			k.t.Fatal(err)
+		}
+		reader = strings.NewReader(string(encoded))
+	}
+	request, err := http.NewRequest(method, k.server.BaseURL()+"/api/v1/contexts/"+kindContext+path, reader)
+	if err != nil {
+		k.t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+k.server.Token())
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		k.t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if err := json.NewDecoder(response.Body).Decode(out); err != nil {
+		k.t.Fatal(err)
+	}
+	return response.StatusCode
+}
+
+func (k kindApply) load(resource, name string) resources.EditableObject {
+	k.t.Helper()
+	var object resources.EditableObject
+	path := "/object?version=v1&resource=" + resource + "&namespace=default&name=" + name
+	if status := k.call(http.MethodGet, path, nil, &object); status != http.StatusOK {
+		k.t.Fatalf("load: status %d", status)
+	}
+	return object
+}
+
+func editBody(resource, name string, object resources.EditableObject, text string, dryRun, force bool) applyBody {
+	return applyBody{
+		Version: "v1", Resource: resource, Namespace: "default", Name: name,
+		YAML: text, ResourceVersion: object.ResourceVersion, UID: object.UID,
+		DryRun: dryRun, Force: force,
+	}
+}
+
+func applyConfigMap(t *testing.T, name, value string) {
+	t.Helper()
+	kubectl(t, fmt.Sprintf(`apiVersion: v1
+kind: ConfigMap
+metadata: {name: %s, namespace: default}
+data: {key: %s}
+`, name, value), "apply", "-f", "-")
+	t.Cleanup(func() {
+		exec.Command("kubectl", "--context", kindContext, "delete", "configmap", name, "--ignore-not-found").Run()
+	})
+}
+
+func configMapValue(t *testing.T, name string) string {
+	t.Helper()
+	return kubectl(t, "", "get", "configmap", name, "-o", "jsonpath={.data.key}")
+}
+
+func TestKindDryRunShowsChangeWithoutWriting(t *testing.T) {
+	applyConfigMap(t, "kh-dry", "original")
+	client := kindApply{t, startKindServer(t)}
+	object := client.load("configmaps", "kh-dry")
+	edited := strings.Replace(object.YAML, "original", "changed", 1)
+
+	var result resources.ApplyResult
+	status := client.call(http.MethodPost, "/apply", editBody("configmaps", "kh-dry", object, edited, true, true), &result)
+	if status != http.StatusOK || result.Applied {
+		t.Fatalf("status %d, result %+v", status, result)
+	}
+	if !strings.Contains(result.Before, "original") || !strings.Contains(result.After, "changed") {
+		t.Errorf("before:\n%s\nafter:\n%s", result.Before, result.After)
+	}
+	if got := configMapValue(t, "kh-dry"); got != "original" {
+		t.Errorf("dry run wrote to the cluster: %q", got)
+	}
+}
+
+func TestKindFieldConflictNeedsForce(t *testing.T) {
+	applyConfigMap(t, "kh-conflict", "original")
+	client := kindApply{t, startKindServer(t)}
+	object := client.load("configmaps", "kh-conflict")
+	edited := strings.Replace(object.YAML, "original", "changed", 1)
+
+	var failure applyFailure
+	status := client.call(http.MethodPost, "/apply", editBody("configmaps", "kh-conflict", object, edited, false, false), &failure)
+	if status != http.StatusConflict || failure.Kind != "fieldConflict" || len(failure.Conflicts) == 0 {
+		t.Fatalf("status %d, failure %+v", status, failure)
+	}
+	if !strings.Contains(failure.Conflicts[0].Message, "kubectl") {
+		t.Errorf("conflict does not name the owner: %+v", failure.Conflicts[0])
+	}
+	if got := configMapValue(t, "kh-conflict"); got != "original" {
+		t.Fatalf("conflicting apply wrote to the cluster: %q", got)
+	}
+
+	var result resources.ApplyResult
+	status = client.call(http.MethodPost, "/apply", editBody("configmaps", "kh-conflict", object, edited, false, true), &result)
+	if status != http.StatusOK || !result.Applied {
+		t.Fatalf("force: status %d, result %+v", status, result)
+	}
+	if got := configMapValue(t, "kh-conflict"); got != "changed" {
+		t.Errorf("value = %q", got)
+	}
+}
+
+func TestKindStaleEditIsRejectedEvenWithForce(t *testing.T) {
+	applyConfigMap(t, "kh-stale", "original")
+	client := kindApply{t, startKindServer(t)}
+	object := client.load("configmaps", "kh-stale")
+
+	kubectl(t, "", "patch", "configmap", "kh-stale", "-p", `{"data":{"key":"someone-else"}}`)
+
+	edited := strings.Replace(object.YAML, "original", "mine", 1)
+	for _, force := range []bool{false, true} {
+		var failure applyFailure
+		status := client.call(http.MethodPost, "/apply", editBody("configmaps", "kh-stale", object, edited, false, force), &failure)
+		if status != http.StatusConflict || failure.Kind != "stale" {
+			t.Fatalf("force %v: status %d, failure %+v", force, status, failure)
+		}
+	}
+	if got := configMapValue(t, "kh-stale"); got != "someone-else" {
+		t.Errorf("stale edit overwrote the cluster: %q", got)
+	}
+}
+
+func TestKindRecreatedObjectIsNotOverwritten(t *testing.T) {
+	applyConfigMap(t, "kh-recreated", "original")
+	client := kindApply{t, startKindServer(t)}
+	object := client.load("configmaps", "kh-recreated")
+	edited := strings.Replace(object.YAML, "original", "mine", 1)
+
+	kubectl(t, "", "delete", "configmap", "kh-recreated")
+	var gone applyFailure
+	status := client.call(http.MethodPost, "/apply", editBody("configmaps", "kh-recreated", object, edited, false, true), &gone)
+	if status != http.StatusNotFound || gone.Kind != "gone" {
+		t.Fatalf("deleted: status %d, failure %+v", status, gone)
+	}
+	if out := kubectl(t, "", "get", "configmap", "kh-recreated", "--ignore-not-found"); out != "" {
+		t.Fatalf("apply brought a deleted object back: %s", out)
+	}
+
+	applyConfigMap(t, "kh-recreated", "new-owner")
+	var failure applyFailure
+	status = client.call(http.MethodPost, "/apply", editBody("configmaps", "kh-recreated", object, edited, false, true), &failure)
+	if status != http.StatusConflict {
+		t.Fatalf("recreated: status %d, failure %+v", status, failure)
+	}
+	if got := configMapValue(t, "kh-recreated"); got != "new-owner" {
+		t.Errorf("value = %q", got)
+	}
+}
+
+func TestKindSecretEditKeepsValues(t *testing.T) {
+	kubectl(t, `apiVersion: v1
+kind: Secret
+metadata: {name: kh-edit-secret, namespace: default}
+stringData: {password: keep-me}
+`, "apply", "-f", "-")
+	t.Cleanup(func() {
+		exec.Command("kubectl", "--context", kindContext, "delete", "secret", "kh-edit-secret", "--ignore-not-found").Run()
+	})
+	client := kindApply{t, startKindServer(t)}
+	object := client.load("secrets", "kh-edit-secret")
+	before := kubectl(t, "", "get", "secret", "kh-edit-secret", "-o", "jsonpath={.data.password}")
+	if !strings.Contains(object.YAML, before) {
+		t.Fatalf("load did not return the real value:\n%s", object.YAML)
+	}
+
+	edited := strings.Replace(object.YAML, "metadata:\n", "metadata:\n  labels:\n    edited: \"yes\"\n", 1)
+	var result resources.ApplyResult
+	status := client.call(http.MethodPost, "/apply", editBody("secrets", "kh-edit-secret", object, edited, false, false), &result)
+	if status != http.StatusOK {
+		t.Fatalf("status %d", status)
+	}
+	if got := kubectl(t, "", "get", "secret", "kh-edit-secret", "-o", "jsonpath={.data.password}"); got != before {
+		t.Errorf("value changed from %q to %q", before, got)
+	}
+	if got := kubectl(t, "", "get", "secret", "kh-edit-secret", "-o", "jsonpath={.metadata.labels.edited}"); got != "yes" {
+		t.Errorf("label = %q", got)
+	}
 }

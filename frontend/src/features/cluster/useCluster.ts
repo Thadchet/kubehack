@@ -27,6 +27,7 @@ export interface APIResource {
   resource: string;
   kind: string;
   namespaced: boolean;
+  editable: boolean;
 }
 
 interface DiscoveryResult {

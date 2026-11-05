@@ -38,6 +38,8 @@ type Server struct {
 	http     *http.Server
 	hub      *resources.Hub
 	openLogs stream.LogOpener
+	// newClient builds dynamic clients for requests outside the hub.
+	newClient resources.ClientFactory
 	// cancel ends WebSocket handlers, which http.Server.Shutdown does not track.
 	cancel context.CancelFunc
 }
@@ -75,12 +77,13 @@ func New(opts Options) (*Server, error) {
 
 	baseCtx, cancel := context.WithCancel(context.Background())
 	s := &Server{
-		token:    token,
-		origins:  origins,
-		listener: listener,
-		hub:      resources.NewHub(newClient),
-		openLogs: openLogs,
-		cancel:   cancel,
+		token:     token,
+		origins:   origins,
+		listener:  listener,
+		hub:       resources.NewHub(newClient),
+		openLogs:  openLogs,
+		newClient: newClient,
+		cancel:    cancel,
 	}
 	handler := s.guard(s.routes())
 	if opts.Debug {
@@ -135,6 +138,8 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/contexts/{name}/resources", discoverResources)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/watch", s.watchResource)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/logs", s.streamLogs)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/object", s.loadObject)
+	mux.HandleFunc("POST /api/v1/contexts/{name}/apply", s.applyObject)
 	return mux
 }
 
