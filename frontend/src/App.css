@@ -1,0 +1,49 @@
+.app {
+  padding: 24px;
+  max-width: 960px;
+  text-align: left;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.details {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 8px 16px;
+  margin-top: 16px;
+}
+
+.details dt {
+  opacity: 0.7;
+}
+
+.details dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.error {
+  color: #ff8a80;
+  white-space: pre-wrap;
+}
+
+.resources {
+  width: 100%;
+  margin-top: 8px;
+  border-collapse: collapse;
+}
+
+.resources th,
+.resources td {
+  padding: 4px 12px 4px 0;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.resources th {
+  opacity: 0.7;
+  font-weight: 500;
+}
