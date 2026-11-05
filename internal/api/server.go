@@ -15,6 +15,7 @@ import (
 
 	"kubehack/internal/cluster"
 	"kubehack/internal/resources"
+	"kubehack/internal/stream"
 )
 
 // Options configures a Server. Zero values select a random port and token.
@@ -25,6 +26,8 @@ type Options struct {
 	Debug          bool
 	// NewClient overrides how clients are built, for tests.
 	NewClient resources.ClientFactory
+	// OpenLogs overrides how logs are read, for tests.
+	OpenLogs stream.LogOpener
 }
 
 // Server is an API server that only listens on the loopback interface.
@@ -34,6 +37,7 @@ type Server struct {
 	listener net.Listener
 	http     *http.Server
 	hub      *resources.Hub
+	openLogs stream.LogOpener
 	// cancel ends WebSocket handlers, which http.Server.Shutdown does not track.
 	cancel context.CancelFunc
 }
@@ -64,12 +68,18 @@ func New(opts Options) (*Server, error) {
 		newClient = resources.ClientForContext
 	}
 
+	openLogs := opts.OpenLogs
+	if openLogs == nil {
+		openLogs = stream.OpenLogs
+	}
+
 	baseCtx, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		token:    token,
 		origins:  origins,
 		listener: listener,
 		hub:      resources.NewHub(newClient),
+		openLogs: openLogs,
 		cancel:   cancel,
 	}
 	handler := s.guard(s.routes())
@@ -124,6 +134,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/contexts/{name}/status", contextStatus)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/resources", discoverResources)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/watch", s.watchResource)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/logs", s.streamLogs)
 	return mux
 }
 

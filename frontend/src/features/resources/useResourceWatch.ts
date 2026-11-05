@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
-import { openSocket } from "./api";
+import { openSocket } from "../../api";
 
 export interface KubeObject {
   kind?: string;
   metadata: {
     name: string;
     namespace?: string;
+    uid?: string;
     creationTimestamp?: string;
+    deletionTimestamp?: string;
+    labels?: Record<string, string>;
+    annotations?: Record<string, string>;
+    ownerReferences?: { kind: string; name: string }[];
   };
-  status?: { phase?: string };
+  // Fields differ per kind, and custom resources can hold anything.
+  [field: string]: unknown;
 }
 
 export interface ResourceRef {
@@ -29,13 +35,14 @@ export interface WatchState {
   synced: boolean;
   connected: boolean;
   error?: string;
+  errorReason?: string;
 }
 
 const initialState: WatchState = { items: [], synced: false, connected: false };
 const firstRetryMs = 1000;
 const maxRetryMs = 10000;
 
-function objectKey(object: KubeObject): string {
+export function objectKey(object: KubeObject): string {
   return `${object.metadata.namespace ?? ""}/${object.metadata.name}`;
 }
 
@@ -100,10 +107,14 @@ export function useResourceWatch(
           }));
           break;
         case "failed":
-          setState((previous) => ({ ...previous, error: message.message }));
+          setState((previous) => ({
+            ...previous,
+            error: message.message,
+            errorReason: message.reason,
+          }));
           break;
         case "recovered":
-          setState((previous) => ({ ...previous, error: undefined }));
+          setState((previous) => ({ ...previous, error: undefined, errorReason: undefined }));
           break;
       }
     };
@@ -127,7 +138,12 @@ export function useResourceWatch(
       incoming = new Map();
       // The server repeats any current failure after the connection opens.
       next.onopen = () =>
-        setState((previous) => ({ ...previous, connected: true, error: undefined }));
+        setState((previous) => ({
+          ...previous,
+          connected: true,
+          error: undefined,
+          errorReason: undefined,
+        }));
       next.onmessage = (event) => handle(JSON.parse(event.data) as WatchMessage);
       next.onclose = reconnect;
     };

@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"os"
 
 	"kubehack/internal/api"
 	"kubehack/internal/cluster"
@@ -22,7 +23,12 @@ func main() {
 		log.Printf("import shell environment: %v", err)
 	}
 
-	server, err := api.New(api.Options{Port: *port, Token: *token, AllowedOrigins: []string{*origin}})
+	server, err := api.New(api.Options{
+		Port:           *port,
+		Token:          *token,
+		AllowedOrigins: []string{*origin},
+		Debug:          os.Getenv("KUBEHACK_DEBUG") != "",
+	})
 	if err != nil {
 		log.Fatal(err)
 	}

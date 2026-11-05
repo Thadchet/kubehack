@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -250,4 +251,90 @@ contexts:
 	if reason != "Forbidden" {
 		t.Errorf("reason = %q", reason)
 	}
+}
+
+const logPodManifest = `apiVersion: v1
+kind: Pod
+metadata: {name: kh-logs, namespace: default}
+spec:
+  restartPolicy: Always
+  terminationGracePeriodSeconds: 0
+  containers:
+  - name: ticker
+    image: busybox:1.36
+    command: [sh, -c, 'i=0; while true; do echo tick-$i; i=$((i+1)); sleep 1; done']
+  - name: crasher
+    image: busybox:1.36
+    command: [sh, -c, 'echo crash-output; sleep 2; exit 1']
+`
+
+func openKindLogs(t *testing.T, server *Server, query string) *websocket.Conn {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	t.Cleanup(cancel)
+	conn, _, err := websocket.Dial(ctx, wsURL(server, "/api/v1/contexts/"+kindContext+"/logs?"+query), &websocket.DialOptions{
+		Subprotocols: []string{wsProtocol, wsTokenPrefix + server.Token()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.CloseNow() })
+	return conn
+}
+
+func readUntilLine(t *testing.T, conn *websocket.Conn, want string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	for {
+		_, body, err := conn.Read(ctx)
+		if err != nil {
+			t.Fatalf("waiting for %q: %v", want, err)
+		}
+		var message logMessage
+		if err := json.Unmarshal(body, &message); err != nil {
+			t.Fatal(err)
+		}
+		if message.Type == "error" {
+			t.Fatalf("waiting for %q: %s", want, message.Message)
+		}
+		if strings.Contains(strings.Join(message.Lines, "\n"), want) {
+			return
+		}
+	}
+}
+
+func TestKindLogsFollowContainersAndPrevious(t *testing.T) {
+	kubectl(t, logPodManifest, "apply", "-f", "-")
+	t.Cleanup(func() {
+		exec.Command("kubectl", "--context", kindContext, "delete", "pod", "kh-logs", "--now", "--ignore-not-found").Run()
+	})
+	deadline := time.Now().Add(5 * time.Minute)
+	for {
+		restarts := kubectl(t, "", "get", "pod", "kh-logs", "-o",
+			`jsonpath={.status.containerStatuses[?(@.name=="crasher")].restartCount}`)
+		if restarts != "" && restarts != "0" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("crasher never restarted; the image may not have been pulled")
+		}
+		time.Sleep(time.Second)
+	}
+
+	server := startKindServer(t)
+
+	follow := openKindLogs(t, server, "namespace=default&pod=kh-logs&container=ticker&follow=true&tail=1")
+	readUntilLine(t, follow, "tick-")
+	// A second line can only come from following, because tail=1 sent just one.
+	first := kubectl(t, "", "logs", "kh-logs", "-c", "ticker", "--tail=1")
+	number := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(first), "tick-"))
+	next, err := strconv.Atoi(number)
+	if err != nil {
+		t.Fatal(err)
+	}
+	readUntilLine(t, follow, fmt.Sprintf("tick-%d", next+2))
+
+	previous := openKindLogs(t, server, "namespace=default&pod=kh-logs&container=crasher&previous=true")
+	readUntilLine(t, previous, "crash-output")
 }

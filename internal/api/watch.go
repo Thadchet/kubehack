@@ -63,6 +63,15 @@ func writeClusterError(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), status)
 }
 
+func acceptWebSocket(w http.ResponseWriter, r *http.Request) (*websocket.Conn, error) {
+	return websocket.Accept(w, r, &websocket.AcceptOptions{
+		Subprotocols: []string{wsProtocol},
+		// guard has already checked Origin against the allowlist, which is
+		// stricter than this library's same-host check and allows wails://.
+		InsecureSkipVerify: true,
+	})
+}
+
 func (s *Server) watchResource(w http.ResponseWriter, r *http.Request) {
 	query := r.URL.Query()
 	key := resources.Key{
@@ -87,12 +96,7 @@ func (s *Server) watchResource(w http.ResponseWriter, r *http.Request) {
 	}
 	defer subscription.Close()
 
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		Subprotocols: []string{wsProtocol},
-		// guard has already checked Origin against the allowlist, which is
-		// stricter than this library's same-host check and allows wails://.
-		InsecureSkipVerify: true,
-	})
+	conn, err := acceptWebSocket(w, r)
 	if err != nil {
 		return
 	}
