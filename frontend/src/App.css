@@ -627,3 +627,88 @@
 .edit-actions [data-testid="edit-apply"] {
   color: var(--band-ink);
 }
+
+.band-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: none;
+}
+
+.band-readonly {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.detail-actions {
+  flex-wrap: wrap;
+}
+
+.scrim {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: color-mix(in srgb, var(--ground) 70%, transparent);
+}
+
+.confirm {
+  overflow: hidden;
+  width: 460px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+}
+
+/* Repeats the top band, so the cluster is named where the decision is made. */
+.confirm-band {
+  padding: 6px 16px;
+  color: var(--band-ink);
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.confirm-body {
+  padding: 12px 16px 4px;
+}
+
+.confirm-body h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.confirm-body p {
+  margin: 4px 0 8px;
+}
+
+.confirm-field {
+  display: grid;
+  gap: 6px;
+  margin: 10px 0;
+}
+
+.confirm-field input {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--ground);
+}
+
+.edit-actions .danger {
+  border-color: transparent;
+  background: var(--bad);
+  color: var(--ground);
+  font-weight: 600;
+}
+
+.yaml-inline {
+  font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  font-size: 12px;
+}

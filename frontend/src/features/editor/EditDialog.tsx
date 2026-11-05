@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiGet, apiPost, ApiError } from "../../api";
+import { apiGet, apiPost } from "../../api";
+import { toFailure, type Failure } from "../actions/failure";
 import { contextColor } from "../cluster/contextColor";
 import type { APIResource } from "../cluster/useCluster";
 import type { KubeObject } from "../resources/useResourceWatch";
@@ -17,32 +18,11 @@ interface ApplyResult {
   applied: boolean;
 }
 
-interface Failure {
-  kind: "fieldConflict" | "stale" | "gone" | "invalid" | "forbidden" | "failed";
-  message: string;
-  conflicts?: { field: string; message: string }[];
-}
-
 interface Props {
   context: string;
   resource: APIResource;
   object: KubeObject;
   onClose: () => void;
-}
-
-function toFailure(error: unknown): Failure {
-  if (error instanceof ApiError) {
-    try {
-      const parsed = JSON.parse(error.body) as Failure;
-      if (parsed.kind) {
-        return parsed;
-      }
-    } catch {
-      // Plain-text bodies come from request validation.
-    }
-    return { kind: "failed", message: error.body };
-  }
-  return { kind: "failed", message: (error as Error).message };
 }
 
 export function EditDialog({ context, resource, object, onClose }: Props) {

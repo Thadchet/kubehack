@@ -8,6 +8,7 @@ import (
 
 	"kubehack/internal/api"
 	"kubehack/internal/cluster"
+	"kubehack/internal/settings"
 )
 
 // appOrigins holds the Origin sent by the macOS webview in a built app.
@@ -39,9 +40,19 @@ func (a *App) startup(ctx context.Context) {
 		log.Printf("import shell environment: %v", err)
 	}
 
+	path, err := settings.DefaultPath()
+	if err != nil {
+		log.Fatalf("find settings: %v", err)
+	}
+	store, err := settings.Open(path)
+	if err != nil {
+		log.Fatalf("open settings: %v", err)
+	}
+
 	server, err := api.New(api.Options{
 		AllowedOrigins: appOrigins,
 		Debug:          os.Getenv("KUBEHACK_DEBUG") != "",
+		Settings:       store,
 	})
 	if err != nil {
 		log.Fatalf("start api: %v", err)

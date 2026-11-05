@@ -67,10 +67,35 @@ export default function App() {
             </option>
           ))}
         </select>
-        <span className="band-status" data-testid="cluster-status">
-          {!selected ? "" : !status ? "Connecting" : status.reachable ? status.version : "Unreachable"}
-        </span>
+        <div className="band-right">
+          {selected && (
+            <label className="band-readonly">
+              <input
+                type="checkbox"
+                data-testid="read-only"
+                checked={cluster.readOnly}
+                onChange={(event) => cluster.setReadOnly(event.target.checked)}
+              />
+              Read-only
+            </label>
+          )}
+          <span className="band-status" data-testid="cluster-status">
+            {!selected
+              ? ""
+              : !status
+                ? "Connecting"
+                : status.reachable
+                  ? status.version
+                  : "Unreachable"}
+          </span>
+        </div>
       </header>
+
+      {cluster.settingsError && (
+        <p className="banner" role="alert">
+          Could not save read-only mode. {cluster.settingsError}
+        </p>
+      )}
 
       {cluster.contextsError && (
         <p className="message" data-tone="bad">
@@ -116,6 +141,7 @@ export default function App() {
             namespace={namespace}
             onNamespace={setNamespace}
             onOpenLogs={openLogs}
+            readOnly={cluster.readOnly}
           />
         </div>
       )}

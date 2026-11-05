@@ -15,6 +15,7 @@ import (
 
 	"kubehack/internal/cluster"
 	"kubehack/internal/resources"
+	"kubehack/internal/settings"
 	"kubehack/internal/stream"
 )
 
@@ -28,6 +29,8 @@ type Options struct {
 	NewClient resources.ClientFactory
 	// OpenLogs overrides how logs are read, for tests.
 	OpenLogs stream.LogOpener
+	// Settings holds user preferences. Nil keeps them in memory only.
+	Settings *settings.Store
 }
 
 // Server is an API server that only listens on the loopback interface.
@@ -40,6 +43,7 @@ type Server struct {
 	openLogs stream.LogOpener
 	// newClient builds dynamic clients for requests outside the hub.
 	newClient resources.ClientFactory
+	settings  *settings.Store
 	// cancel ends WebSocket handlers, which http.Server.Shutdown does not track.
 	cancel context.CancelFunc
 }
@@ -75,6 +79,13 @@ func New(opts Options) (*Server, error) {
 		openLogs = stream.OpenLogs
 	}
 
+	store := opts.Settings
+	if store == nil {
+		if store, err = settings.Open(""); err != nil {
+			return nil, err
+		}
+	}
+
 	baseCtx, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		token:     token,
@@ -83,6 +94,7 @@ func New(opts Options) (*Server, error) {
 		hub:       resources.NewHub(newClient),
 		openLogs:  openLogs,
 		newClient: newClient,
+		settings:  store,
 		cancel:    cancel,
 	}
 	handler := s.guard(s.routes())
@@ -140,6 +152,11 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/contexts/{name}/logs", s.streamLogs)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/object", s.loadObject)
 	mux.HandleFunc("POST /api/v1/contexts/{name}/apply", s.applyObject)
+	mux.HandleFunc("POST /api/v1/contexts/{name}/delete", s.handleAction(deleteObject))
+	mux.HandleFunc("POST /api/v1/contexts/{name}/scale", s.handleAction(scaleObject))
+	mux.HandleFunc("POST /api/v1/contexts/{name}/restart", s.handleAction(restartObject))
+	mux.HandleFunc("GET /api/v1/settings", s.getSettings)
+	mux.HandleFunc("PUT /api/v1/contexts/{name}/readonly", s.setReadOnly)
 	return mux
 }
 

@@ -1,6 +1,9 @@
 import { useMemo, useState } from "react";
 import { stringify } from "yaml";
+import type { ActionType } from "../actions/ActionDialog";
+import type { APIResource } from "../cluster/useCluster";
 import { formatAge } from "./columns";
+import { SecretValues } from "./SecretValues";
 import { useResourceWatch, type KubeObject, type ResourceRef } from "./useResourceWatch";
 
 const eventsRef: ResourceRef = { group: "", version: "v1", resource: "events" };
@@ -10,10 +13,12 @@ type Tab = "overview" | "yaml" | "events";
 interface Props {
   context: string;
   object: KubeObject;
-  kindLabel: string;
+  resource: APIResource;
   onClose: () => void;
   onOpenLogs?: () => void;
   onEdit?: () => void;
+  // Missing while the context is read-only.
+  onAction?: (type: ActionType) => void;
 }
 
 type Fields = Record<string, unknown>;
@@ -42,12 +47,18 @@ function Pairs({ title, values }: { title: string; values?: Record<string, strin
   );
 }
 
-function Overview({ object }: { object: KubeObject }) {
+interface OverviewProps {
+  context: string;
+  resource: APIResource;
+  object: KubeObject;
+}
+
+function Overview({ context, resource, object }: OverviewProps) {
   const { metadata } = object;
   const status = object.status as Fields | undefined;
   const conditions = fields(status?.conditions);
   const containers = fields(status?.containerStatuses);
-  const secretKeys = object.kind === "Secret" ? Object.keys((object.data as Fields) ?? {}) : [];
+  const isSecret = resource.group === "" && resource.resource === "secrets";
 
   return (
     <>
@@ -75,17 +86,7 @@ function Overview({ object }: { object: KubeObject }) {
         </dl>
       </section>
 
-      {secretKeys.length > 0 && (
-        <section className="detail-section">
-          <h3>Keys</h3>
-          <ul className="plain">
-            {secretKeys.map((key) => (
-              <li key={key}>{key}</li>
-            ))}
-          </ul>
-          <p className="muted">Values stay hidden in this view.</p>
-        </section>
-      )}
+      {isSecret && <SecretValues context={context} resource={resource} object={object} />}
 
       {containers.length > 0 && (
         <section className="detail-section">
@@ -178,11 +179,13 @@ function eventTime(event: KubeObject): string {
 export function DetailPanel({
   context,
   object,
-  kindLabel,
+  resource,
   onClose,
   onOpenLogs,
   onEdit,
+  onAction,
 }: Props) {
+  const kindLabel = resource.kind;
   const [tab, setTab] = useState<Tab>("overview");
   const yaml = useMemo(() => (tab === "yaml" ? stringify(object) : ""), [tab, object]);
 
@@ -201,6 +204,26 @@ export function DetailPanel({
             {onEdit && (
               <button type="button" className="action" onClick={onEdit}>
                 Edit (e)
+              </button>
+            )}
+            {onAction && resource.scalable && (
+              <button type="button" className="action" onClick={() => onAction("scale")}>
+                Scale
+              </button>
+            )}
+            {onAction && resource.restartable && (
+              <button type="button" className="action" onClick={() => onAction("restart")}>
+                Restart
+              </button>
+            )}
+            {onAction && resource.deletable && (
+              <button
+                type="button"
+                className="action"
+                data-tone="bad"
+                onClick={() => onAction("delete")}
+              >
+                Delete
               </button>
             )}
           </div>
@@ -223,7 +246,7 @@ export function DetailPanel({
         ))}
       </div>
       <div className="detail-body">
-        {tab === "overview" && <Overview object={object} />}
+        {tab === "overview" && <Overview context={context} resource={resource} object={object} />}
         {tab === "yaml" && (
           <>
             {object.kind === "Secret" && (

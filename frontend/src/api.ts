@@ -52,6 +52,14 @@ export function apiPost<T>(path: string, body: unknown): Promise<T> {
   });
 }
 
+export function apiPut<T>(path: string, body: unknown): Promise<T> {
+  return request<T>(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 // Browsers cannot set headers on a WebSocket, so the token travels as a
 // subprotocol. The server selects "kubehack.v1" and never echoes the token.
 export async function openSocket(path: string): Promise<WebSocket> {

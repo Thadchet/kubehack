@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { apiGet } from "../../api";
+import { apiGet, apiPut } from "../../api";
 
 export interface KubeContext {
   name: string;
@@ -28,11 +28,18 @@ export interface APIResource {
   kind: string;
   namespaced: boolean;
   editable: boolean;
+  deletable: boolean;
+  scalable: boolean;
+  restartable: boolean;
 }
 
 interface DiscoveryResult {
   resources: APIResource[];
   warnings?: string[];
+}
+
+interface Settings {
+  readOnlyContexts: string[];
 }
 
 function contextPath(name: string, suffix: string): string {
@@ -47,6 +54,14 @@ export function useCluster() {
   const [resources, setResources] = useState<APIResource[]>();
   const [resourcesError, setResourcesError] = useState<string>();
   const [attempt, setAttempt] = useState(0);
+  const [readOnlyContexts, setReadOnlyContexts] = useState<string[]>([]);
+  const [settingsError, setSettingsError] = useState<string>();
+
+  useEffect(() => {
+    apiGet<Settings>("/api/v1/settings")
+      .then((settings) => setReadOnlyContexts(settings.readOnlyContexts))
+      .catch((error: Error) => setSettingsError(error.message));
+  }, []);
 
   useEffect(() => {
     apiGet<ContextList>("/api/v1/contexts")
@@ -94,6 +109,16 @@ export function useCluster() {
 
   const retry = useCallback(() => setAttempt((value) => value + 1), []);
 
+  const setReadOnly = useCallback(
+    (readOnly: boolean) => {
+      setSettingsError(undefined);
+      apiPut<Settings>(contextPath(selected, "readonly"), { readOnly })
+        .then((settings) => setReadOnlyContexts(settings.readOnlyContexts))
+        .catch((error: Error) => setSettingsError(error.message));
+    },
+    [selected],
+  );
+
   return {
     contexts,
     contextsError,
@@ -103,5 +128,8 @@ export function useCluster() {
     resources,
     resourcesError,
     retry,
+    readOnly: readOnlyContexts.includes(selected),
+    setReadOnly,
+    settingsError,
   };
 }

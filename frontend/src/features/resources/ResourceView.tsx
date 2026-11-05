@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { APIResource } from "../cluster/useCluster";
+import { ActionDialog, type ActionType } from "../actions/ActionDialog";
 import { EditDialog } from "../editor/EditDialog";
 import { columnsFor, hasPhase } from "./columns";
 import { DetailPanel } from "./DetailPanel";
@@ -21,6 +22,7 @@ interface Props {
   namespace: string;
   onNamespace: (namespace: string) => void;
   onOpenLogs: (pod: KubeObject) => void;
+  readOnly: boolean;
 }
 
 function isTyping(target: EventTarget | null): boolean {
@@ -33,7 +35,14 @@ function isTyping(target: EventTarget | null): boolean {
   );
 }
 
-export function ResourceView({ context, resource, namespace, onNamespace, onOpenLogs }: Props) {
+export function ResourceView({
+  context,
+  resource,
+  namespace,
+  onNamespace,
+  onOpenLogs,
+  readOnly,
+}: Props) {
   const scope = resource.namespaced ? namespace : "";
   const watch = useResourceWatch(context, resource, scope);
   const namespaces = useResourceWatch(context, namespacesRef);
@@ -42,6 +51,7 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
   const [selected, setSelected] = useState<string>();
   const [sort, setSort] = useState(defaultSort);
   const [editing, setEditing] = useState<KubeObject>();
+  const [action, setAction] = useState<{ type: ActionType; object: KubeObject }>();
   const filterInput = useRef<HTMLInputElement>(null);
 
   const id = resourceId(resource);
@@ -57,7 +67,16 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
     setFilter("");
     setSort(defaultSort);
     setEditing(undefined);
+    setAction(undefined);
   }, [context, id, scope]);
+
+  // Turning on read-only closes anything that could still write.
+  useEffect(() => {
+    if (readOnly) {
+      setEditing(undefined);
+      setAction(undefined);
+    }
+  }, [readOnly]);
 
   const rows = useMemo(() => {
     const needle = filter.trim().toLowerCase();
@@ -73,7 +92,7 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (editing) {
+      if (editing || action) {
         return;
       }
       if (event.key === "Escape") {
@@ -97,7 +116,7 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
         onOpenLogs(selectedObject);
         return;
       }
-      if (event.key === "e" && resource.editable && selectedObject) {
+      if (event.key === "e" && resource.editable && !readOnly && selectedObject) {
         setEditing(selectedObject);
         return;
       }
@@ -111,7 +130,17 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [rows, selected, selectedObject, isPods, onOpenLogs, editing, resource.editable]);
+  }, [
+    rows,
+    selected,
+    selectedObject,
+    isPods,
+    onOpenLogs,
+    editing,
+    action,
+    resource.editable,
+    readOnly,
+  ]);
 
   const namespaceNames = useMemo(
     () => namespaces.items.map((item) => item.metadata.name).sort(),
@@ -216,10 +245,11 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
           key={selected}
           context={context}
           object={selectedObject}
-          kindLabel={resource.kind}
+          resource={resource}
           onClose={() => setSelected(undefined)}
           onOpenLogs={isPods ? () => onOpenLogs(selectedObject) : undefined}
-          onEdit={resource.editable ? () => setEditing(selectedObject) : undefined}
+          onEdit={resource.editable && !readOnly ? () => setEditing(selectedObject) : undefined}
+          onAction={readOnly ? undefined : (type) => setAction({ type, object: selectedObject })}
         />
       )}
 
@@ -229,6 +259,16 @@ export function ResourceView({ context, resource, namespace, onNamespace, onOpen
           resource={resource}
           object={editing}
           onClose={() => setEditing(undefined)}
+        />
+      )}
+
+      {action && (
+        <ActionDialog
+          type={action.type}
+          context={context}
+          resource={resource}
+          object={action.object}
+          onClose={() => setAction(undefined)}
         />
       )}
     </div>

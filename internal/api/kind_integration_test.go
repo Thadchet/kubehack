@@ -20,6 +20,7 @@ import (
 	"github.com/coder/websocket"
 
 	"kubehack/internal/resources"
+	"kubehack/internal/settings"
 )
 
 // These tests need a disposable cluster, and they create and delete objects:
@@ -135,6 +136,22 @@ func TestKindDiscoveryIncludesCustomResources(t *testing.T) {
 	}
 	if strings.Contains(string(body), "pods/log") {
 		t.Error("discovery includes a subresource")
+	}
+
+	var discovered resources.Discovery
+	if err := json.Unmarshal(body, &discovered); err != nil {
+		t.Fatal(err)
+	}
+	abilities := make(map[string]resources.APIResource)
+	for _, item := range discovered.Resources {
+		abilities[item.Resource] = item
+	}
+	deployments, pods := abilities["deployments"], abilities["pods"]
+	if !deployments.Scalable || !deployments.Restartable || !deployments.Deletable || !deployments.Editable {
+		t.Errorf("deployments = %+v", deployments)
+	}
+	if pods.Scalable || pods.Restartable || !pods.Deletable {
+		t.Errorf("pods = %+v", pods)
 	}
 }
 
@@ -528,5 +545,101 @@ stringData: {password: keep-me}
 	}
 	if got := kubectl(t, "", "get", "secret", "kh-edit-secret", "-o", "jsonpath={.metadata.labels.edited}"); got != "yes" {
 		t.Errorf("label = %q", got)
+	}
+}
+
+func actionTarget(group, resource, name, uid string) actionBody {
+	return actionBody{
+		Group: group, Version: "v1", Resource: resource, Namespace: "default", Name: name, UID: uid,
+	}
+}
+
+func TestKindDeleteChecksUID(t *testing.T) {
+	applyConfigMap(t, "kh-delete", "value")
+	client := kindApply{t, startKindServer(t)}
+	object := client.load("configmaps", "kh-delete")
+
+	var failure applyFailure
+	status := client.call(http.MethodPost, "/delete", actionTarget("", "configmaps", "kh-delete", "wrong-uid"), &failure)
+	if status != http.StatusConflict || failure.Kind != "stale" {
+		t.Fatalf("wrong uid: status %d, failure %+v", status, failure)
+	}
+	if got := configMapValue(t, "kh-delete"); got != "value" {
+		t.Fatalf("object was deleted despite a wrong uid: %q", got)
+	}
+
+	var done map[string]bool
+	if status := client.call(http.MethodPost, "/delete", actionTarget("", "configmaps", "kh-delete", object.UID), &done); status != http.StatusOK {
+		t.Fatalf("status %d", status)
+	}
+	if out := kubectl(t, "", "get", "configmap", "kh-delete", "--ignore-not-found"); out != "" {
+		t.Errorf("still exists: %s", out)
+	}
+}
+
+func TestKindScaleAndRestart(t *testing.T) {
+	kubectl(t, "", "create", "deployment", "kh-actions", "--image=registry.k8s.io/pause:3.10")
+	t.Cleanup(func() {
+		exec.Command("kubectl", "--context", kindContext, "delete", "deployment", "kh-actions", "--ignore-not-found").Run()
+	})
+	client := kindApply{t, startKindServer(t)}
+
+	body := actionTarget("apps", "deployments", "kh-actions", "")
+	body.Replicas = 3
+	var done map[string]bool
+	if status := client.call(http.MethodPost, "/scale", body, &done); status != http.StatusOK {
+		t.Fatalf("scale: status %d", status)
+	}
+	if got := kubectl(t, "", "get", "deployment", "kh-actions", "-o", "jsonpath={.spec.replicas}"); got != "3" {
+		t.Errorf("replicas = %q", got)
+	}
+
+	if status := client.call(http.MethodPost, "/restart", body, &done); status != http.StatusOK {
+		t.Fatalf("restart: status %d", status)
+	}
+	annotation := kubectl(t, "", "get", "deployment", "kh-actions", "-o",
+		`jsonpath={.spec.template.metadata.annotations.kubectl\.kubernetes\.io/restartedAt}`)
+	if annotation == "" {
+		t.Error("restart annotation missing")
+	}
+	generation := kubectl(t, "", "get", "deployment", "kh-actions", "-o", "jsonpath={.metadata.generation}")
+	if generation == "1" {
+		t.Errorf("generation = %s, no rollout was triggered", generation)
+	}
+}
+
+func TestKindReadOnlyProtectsAndPersists(t *testing.T) {
+	applyConfigMap(t, "kh-readonly", "value")
+	path := filepath.Join(t.TempDir(), "settings.json")
+	open := func() kindApply {
+		store, err := settings.Open(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server, err := New(Options{Settings: store})
+		if err != nil {
+			t.Fatal(err)
+		}
+		go server.Serve()
+		t.Cleanup(func() { server.Shutdown(context.Background()) })
+		return kindApply{t, server}
+	}
+
+	client := open()
+	object := client.load("configmaps", "kh-readonly")
+	var current settingsResponse
+	if status := client.call(http.MethodPut, "/readonly", map[string]bool{"readOnly": true}, &current); status != http.StatusOK {
+		t.Fatalf("status %d", status)
+	}
+
+	// A new server stands in for relaunching the app.
+	client = open()
+	var failure applyFailure
+	status := client.call(http.MethodPost, "/delete", actionTarget("", "configmaps", "kh-readonly", object.UID), &failure)
+	if status != http.StatusForbidden || failure.Kind != "readOnly" {
+		t.Fatalf("status %d, failure %+v", status, failure)
+	}
+	if got := configMapValue(t, "kh-readonly"); got != "value" {
+		t.Errorf("value = %q", got)
 	}
 }

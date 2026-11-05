@@ -36,7 +36,7 @@ type fieldConflict struct {
 }
 
 // applyFailure tells the UI which recovery to offer. Kind is "fieldConflict",
-// "stale", "gone", "invalid", "forbidden" or "failed".
+// "stale", "gone", "invalid", "forbidden", "readOnly" or "failed".
 type applyFailure struct {
 	Kind      string          `json:"kind"`
 	Message   string          `json:"message"`
@@ -82,6 +82,10 @@ func (s *Server) applyObject(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "version, resource and name are required", http.StatusBadRequest)
 		return
 	}
+	// A dry run changes nothing, so previews stay available in read-only mode.
+	if !body.DryRun && s.rejectReadOnly(w, r) {
+		return
+	}
 
 	client, err := s.newClient(r.PathValue("name"))
 	if err != nil {
@@ -117,7 +121,7 @@ func classifyApplyError(err error) (int, applyFailure) {
 	switch {
 	case errors.Is(err, cluster.ErrContextNotFound):
 		return http.StatusNotFound, failure
-	case errors.Is(err, resources.ErrInvalidEdit):
+	case errors.Is(err, resources.ErrInvalidEdit), errors.Is(err, resources.ErrUnsupportedAction):
 		failure.Kind = "invalid"
 		return http.StatusUnprocessableEntity, failure
 	case errors.Is(err, resources.ErrStale):
