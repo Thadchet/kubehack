@@ -1,12 +1,14 @@
 # Kubehack
 
-A desktop app for looking after your Kubernetes clusters, on Mac and Windows, that
-can also run in Docker and open in your browser. See what's running, read logs, open a shell in a container, and manage Helm releases from
-one window, without typing `kubectl` commands.
+[![CI](https://github.com/Thadchet/kubehack/actions/workflows/ci.yml/badge.svg)](https://github.com/Thadchet/kubehack/actions/workflows/ci.yml)
 
-Kubehack uses the same access you already have with `kubectl`. There's nothing
-to install in your cluster and no account to create, and it only talks to your
-own clusters and any chart source you choose.
+Look after your Kubernetes clusters from one window. See what's running, read logs,
+open a shell in a container, and manage Helm releases, without typing `kubectl`
+commands.
+
+Kubehack uses the access you already have with `kubectl`. There's nothing to install
+in your cluster and no account to create. It runs on your own computer, and only
+talks to your clusters and any chart source you choose.
 
 ## What you can do
 
@@ -16,7 +18,7 @@ own clusters and any chart source you choose.
 - Edit YAML and review a diff before applying it
 - Edit ConfigMap and Secret values as readable JSON, already decoded
 - Scale, restart and delete, with a confirmation first
-- Forward a port from a pod or service to your Mac
+- Forward a port from a pod or service to your computer
 - See CPU and memory usage
 - Install, upgrade, roll back and uninstall Helm charts
 
@@ -27,6 +29,12 @@ terminal, Kubehack will work too, because it uses the same kubeconfig and sign-i
 tools.
 
 ## Install
+
+| Option | Best for | Status |
+| --- | --- | --- |
+| [Mac app](#mac) | Everyday use on Apple silicon or Intel | Main platform |
+| [Docker](#docker) | Trying Kubehack without installing an app | Tested on a Mac with Docker Desktop |
+| [Windows app](#windows) | Everyday use on Windows | Not yet tested on a real PC |
 
 ### Mac
 
@@ -83,7 +91,8 @@ docker run --rm -p 127.0.0.1:8765:8765 \
 ```
 
 Open the link the terminal shows. Press Ctrl+C to stop Kubehack. To update, run
-`docker pull` with the same image name.
+`docker pull` with the same image name. To stay on one version, add it to the image
+name, such as `ghcr.io/thadchet/kubehack:1.0.0` or `:1.0.0-gke`.
 
 Keep `127.0.0.1` in the `-p` option. The link holds a secret token, and anyone with
 it can use your cluster access, so don't share it or open the port to your network.
@@ -131,7 +140,7 @@ details and events.
 | --- | --- |
 | Logs | Follow a pod's logs in the panel at the bottom |
 | Shell | Open a terminal in the container |
-| Forward | Reach a pod or service from your Mac, for example in your browser |
+| Forward | Reach a pod or service from your computer, for example in your browser |
 | Edit | Change the YAML, then review the changes before applying them |
 | Edit a ConfigMap or Secret | Change the values as JSON. Secret values are decoded and encoded for you. Switch to YAML for labels and other fields |
 | Scale | Change the number of replicas |
@@ -163,7 +172,7 @@ upgrade it, roll it back to an earlier revision, or uninstall it.
   terminal window. Use `nohup` for anything that needs to carry on.
 - Port forwards stop when you quit Kubehack. If one drops, a message at the top
   says why and offers **Reconnect**.
-- Any program on your Mac can reach a forwarded port, as with
+- Any program on your computer can reach a forwarded port, as with
   `kubectl port-forward`. Other computers can't.
 - Deleting a ConfigMap or Secret key that another tool manages, such as Helm or
   `kubectl apply`, leaves it in place. The review screen tells you when this happens.
@@ -194,6 +203,26 @@ free one.
 
 **macOS says the app is damaged or can't be opened.** Run the `xattr` command from
 the install steps again.
+
+## Security and privacy
+
+- **Your access stays yours.** Kubehack acts with your kubeconfig and sign-in tools,
+  so it can do whatever you can do with `kubectl`. Use **Read-only** for clusters
+  you only want to look at.
+- **Nothing is sent elsewhere.** There's no account, and Kubehack only connects to
+  your clusters and the chart sources you enter.
+- **Its local API is protected.** Each launch of the app uses a random port and
+  secret token, and the API only accepts requests from Kubehack's own window. In
+  Docker, treat the link as a password, and keep `127.0.0.1` in the `-p` option.
+- **The downloads aren't signed**, so macOS and Windows warn you about them. The
+  source code and the build that produces the Docker images are in this repository.
+
+## Get help
+
+Report bugs and ask for features in
+[GitHub Issues](https://github.com/Thadchet/kubehack/issues). Say which version you
+use (Mac, Windows or Docker) and what you expected. Don't paste your kubeconfig,
+tokens, Secret values or a Docker link, because issues are public.
 
 ## Remove Kubehack
 
@@ -240,7 +269,7 @@ built app's origin. Read-only choices aren't saved in this mode.
 **Run in Docker from source.** This builds the image and starts it, and opens your
 browser. The UI and the API share one port. It needs Docker, not Go or Node, and
 shares its **Read-only** choices with the desktop app. Set `KUBEHACK_PORT` if port
-8765 is taken. Pushing to `main` publishes both images to `ghcr.io`.
+8765 is taken.
 
 ```sh
 ./run.sh docker
@@ -248,6 +277,10 @@ shares its **Read-only** choices with the desktop app. Set `KUBEHACK_PORT` if po
 
 Set `KUBEHACK_DEBUG=1` to log API requests. Set `KUBECONFIG` before any of these
 `run.sh` commands to limit a run to certain clusters.
+
+**Release.** Tests run on every pull request and push. Pushing to `main` then
+publishes the `edge` and `edge-gke` images. Pushing a version tag, such as `v1.0.0`,
+publishes that version and moves `latest` and `gke` to it.
 
 **Test.**
 
@@ -286,3 +319,7 @@ The API listens on `127.0.0.1` with a random port and token for each launch, and
 checks `Host` and `Origin`, because any web page can reach a loopback port. In
 Docker the API listens on all of the container's interfaces, so the port must only
 be published on the host's `127.0.0.1`.
+
+## License
+
+Kubehack is released under the [MIT License](LICENSE).

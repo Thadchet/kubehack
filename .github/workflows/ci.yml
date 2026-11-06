@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: go test -race ./internal/...
+      - run: npm ci
+        working-directory: frontend
+      - run: npx tsc --noEmit
+        working-directory: frontend
+      - run: npm test
+        working-directory: frontend
+
+  # main publishes the edge tags. Only a version tag moves latest, so that an
+  # ordinary merge can't reach people who follow the README.
+  publish:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - target: kubehack
+            suffix: ""
+            stable: latest
+          - target: kubehack-gke
+            suffix: "-gke"
+            stable: gke
+    steps:
+      - uses: actions/checkout@v4
+      - id: tags
+        env:
+          SUFFIX: ${{ matrix.suffix }}
+          STABLE: ${{ matrix.stable }}
+        run: |
+          image=ghcr.io/thadchet/kubehack
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            echo "tags=$image:${GITHUB_REF_NAME#v}$SUFFIX,$image:$STABLE" >> "$GITHUB_OUTPUT"
+          else
+            echo "tags=$image:edge$SUFFIX" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: ${{ matrix.target }}
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.tags.outputs.tags }}
