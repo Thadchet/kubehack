@@ -46,11 +46,11 @@ jobs:
       - run: |
           ./run.sh docker > run.log 2>&1 &
           for _ in $(seq 1 300); do grep -q 'Kubehack is at' run.log && break; sleep 2; done
-          token=$(sed -n 's/.*#token=//p' run.log)
+          token=$(grep -m1 'Kubehack is at' run.log | sed 's/.*#token=//')
           curl -fsS -o /dev/null http://localhost:8765/
           code=$(curl -sS -o status.json -w '%{http_code}' -H "Authorization: Bearer $token" http://localhost:8765/api/v1/contexts/kind-ci/status || true)
           if ! grep -q '"reachable":true' status.json; then
-            details=$(grep -v 'Kubehack is at' run.log | tail -5 | tr '\n' ' ')
+            details=$(grep -v 'token=' run.log | tail -5 | tr '\n' ' ')
             echo "::error::status $code: $(cat status.json) log: $details"
             exit 1
           fi
