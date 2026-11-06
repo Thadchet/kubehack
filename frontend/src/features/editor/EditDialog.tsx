@@ -114,6 +114,48 @@ export function EditDialog({ context, resource, object, revealed: alreadyReveale
     }
   };
 
+  const send = (current: EditableObject, dryRun: boolean, useForce: boolean) => {
+    // The API server also reads JSON, which leaves no YAML quoting to get wrong.
+    const edited = kind && mode === "json" ? JSON.stringify(applyValues(text, jsonText, kind)) : text;
+    return apiPost<ApplyResult>(`/api/v1/contexts/${encodeURIComponent(context)}/apply`, {
+      group: resource.group,
+      version: resource.version,
+      resource: resource.resource,
+      namespace,
+      name,
+      yaml: edited,
+      resourceVersion: current.resourceVersion,
+      uid: current.uid,
+      dryRun,
+      force: useForce,
+    });
+  };
+
+  // Saves without the review screen, unless the edit needs explaining: one that
+  // changes nothing, or that leaves keys in place, would otherwise look saved.
+  const save = async () => {
+    if (!loaded) {
+      return;
+    }
+    setBusy(true);
+    setFailure(undefined);
+    try {
+      const check = await send(loaded, true, false);
+      const leftInPlace = kind && mode === "json" ? keptKeys(check.after, jsonText, kind) : [];
+      if (check.before === check.after || leftInPlace.length > 0) {
+        setForce(false);
+        setPreview(check);
+        return;
+      }
+      await send(loaded, false, false);
+      onClose();
+    } catch (error) {
+      setFailure(toFailure(error));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const submit = async (dryRun: boolean, useForce: boolean) => {
     if (!loaded) {
       return;
@@ -121,23 +163,7 @@ export function EditDialog({ context, resource, object, revealed: alreadyReveale
     setBusy(true);
     setFailure(undefined);
     try {
-      // The API server also reads JSON, which leaves no YAML quoting to get wrong.
-      const edited = kind && mode === "json" ? JSON.stringify(applyValues(text, jsonText, kind)) : text;
-      const result = await apiPost<ApplyResult>(
-        `/api/v1/contexts/${encodeURIComponent(context)}/apply`,
-        {
-          group: resource.group,
-          version: resource.version,
-          resource: resource.resource,
-          namespace,
-          name,
-          yaml: edited,
-          resourceVersion: loaded.resourceVersion,
-          uid: loaded.uid,
-          dryRun,
-          force: useForce,
-        },
-      );
+      const result = await send(loaded, dryRun, useForce);
       if (result.applied) {
         onClose();
         return;
@@ -288,15 +314,39 @@ export function EditDialog({ context, resource, object, revealed: alreadyReveale
           </button>
         )}
         {loaded && !preview && failure?.kind !== "stale" && failure?.kind !== "gone" && (
-          <button
-            type="button"
-            className="primary"
-            disabled={busy}
-            data-testid="edit-preview"
-            onClick={() => void submit(true, false)}
-          >
-            Preview changes
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={busy}
+              data-testid="edit-preview"
+              onClick={() => void submit(true, false)}
+            >
+              Preview changes
+            </button>
+            {failure?.kind === "fieldConflict" ? (
+              <button
+                type="button"
+                className="primary"
+                style={applyStyle}
+                disabled={busy}
+                data-testid="edit-save-force"
+                onClick={() => void submit(false, true)}
+              >
+                Save with force to {context}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="primary"
+                style={applyStyle}
+                disabled={busy}
+                data-testid="edit-save"
+                onClick={() => void save()}
+              >
+                Save to {context}
+              </button>
+            )}
+          </>
         )}
         {preview && !unchanged && (
           <button
