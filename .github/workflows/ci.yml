@@ -31,10 +31,72 @@ jobs:
       - run: npm test
         working-directory: frontend
 
+  # kind's API is published on all interfaces, because containers on Linux can't
+  # reach a port bound to the host's 127.0.0.1.
+  docker-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnetworking:\n  apiServerAddress: "0.0.0.0"\n  apiServerPort: 6443\n' > kind.yaml
+          kind create cluster --name ci --config kind.yaml
+          bridge=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+          kubectl config set-cluster kind-ci --server="https://$bridge:6443" --tls-server-name=localhost
+          chmod 600 ~/.kube/config
+      - run: |
+          ./run.sh docker > run.log 2>&1 &
+          for _ in $(seq 1 300); do grep -q 'Kubehack is at' run.log && break; sleep 2; done
+          token=$(sed -n 's/.*#token=//p' run.log)
+          curl -fsS -o /dev/null http://localhost:8765/
+          curl -fsS -H "Authorization: Bearer $token" http://localhost:8765/api/v1/contexts/kind-ci/status | tee status.json
+          grep -q '"reachable":true' status.json
+
+  # Builds on every push, so that a broken desktop build shows up before a release.
+  desktop:
+    needs: test
+    if: github.event_name != 'pull_request'
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    env:
+      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Import the signing certificate
+        if: env.APPLE_CERTIFICATE != ''
+        run: |
+          keychain=$RUNNER_TEMP/signing.keychain-db
+          password=$(openssl rand -hex 16)
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/certificate.p12" -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain"
+          identity=$(security find-identity -v -p codesigning "$keychain" | sed -n 's/.*"\(Developer ID Application.*\)"/\1/p' | head -1)
+          echo "KUBEHACK_SIGN_IDENTITY=$identity" >> "$GITHUB_ENV"
+      - run: ./run.sh release
+      - name: Attach the downloads to a GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" releases/*.zip --verify-tag --generate-notes
+
   # main publishes the edge tags. Only a version tag moves latest, so that an
   # ordinary merge can't reach people who follow the README.
   publish:
-    needs: test
+    needs: [test, docker-linux]
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:

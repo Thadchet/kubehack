@@ -96,12 +96,24 @@ run_dev() {
     npx vite --port "$ui_port" --strictPort
 }
 
+# Signs and notarizes the app when KUBEHACK_SIGN_IDENTITY names a Developer ID
+# certificate. Notarizing also needs APPLE_ID, APPLE_TEAM_ID and APPLE_APP_PASSWORD.
+sign_app() {
+  [ -n "${KUBEHACK_SIGN_IDENTITY:-}" ] || return 0
+  codesign --force --deep --options runtime --timestamp --sign "$KUBEHACK_SIGN_IDENTITY" "$app"
+  ditto -c -k --keepParent "$app" build/bin/notarize.zip
+  xcrun notarytool submit build/bin/notarize.zip --wait \
+    --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_APP_PASSWORD"
+  xcrun stapler staple "$app"
+}
+
 run_release() {
   find_wails
   mkdir -p releases
 
   # One build covers both Apple silicon and Intel Macs.
   "$wails" build -clean -platform darwin/universal
+  sign_app
   rm -f releases/kubehack-macos.zip
   # ditto keeps the bundle's signature, which zip can break.
   ditto -c -k --keepParent "$app" releases/kubehack-macos.zip
