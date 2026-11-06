@@ -10,7 +10,7 @@ Kubehack is a Kubernetes desktop app built with Wails, Go and React. It also run
 ./run.sh                # build if the code changed, then open the Mac app
 ./run.sh dev            # API and Vite with hot reload, in a browser (`wails dev` doesn't work)
 ./run.sh docker         # build the image from source and run it; KUBEHACK_PORT changes the port
-./run.sh release        # build both zips into releases/, which are committed
+./run.sh release        # build both zips into releases/, which git ignores
 
 go test -race ./internal/...                     # all Go tests
 go test ./internal/api -run TestGuard            # one Go test

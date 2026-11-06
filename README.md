@@ -38,7 +38,7 @@ tools.
 
 ### Mac
 
-1. Download [kubehack-macos.zip](https://github.com/Thadchet/kubehack/raw/main/releases/kubehack-macos.zip).
+1. Download [kubehack-macos.zip](https://github.com/Thadchet/kubehack/releases/latest/download/kubehack-macos.zip).
    It works on Apple silicon and Intel.
 2. Open the zip, and drag `kubehack.app` to your Applications folder.
 3. The app isn't signed by Apple, so macOS blocks it at first. Open Terminal and
@@ -54,7 +54,7 @@ tools.
 
 The Windows version is new, and hasn't been tested on a real Windows PC yet.
 
-1. Download [kubehack-windows-x64.zip](https://github.com/Thadchet/kubehack/raw/main/releases/kubehack-windows-x64.zip).
+1. Download [kubehack-windows-x64.zip](https://github.com/Thadchet/kubehack/releases/latest/download/kubehack-windows-x64.zip).
 2. Extract the zip, and open `kubehack.exe`.
 3. The app isn't signed, so Windows may show a SmartScreen warning. Select **More
    info**, then **Run anyway**.
@@ -257,8 +257,8 @@ cd kubehack
 ./run.sh
 ```
 
-**Make the downloads.** This builds both zips into `releases/` on a Mac, then
-commit them.
+**Make the downloads.** This builds both zips into `releases/` on a Mac. CI does
+this for each release, so you only need it to try a build yourself.
 
 ```sh
 ./run.sh release
