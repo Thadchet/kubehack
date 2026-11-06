@@ -34,6 +34,8 @@ type Options struct {
 	RunShell stream.ExecRunner
 	// HangupShell overrides how dropped shells are ended, for tests.
 	HangupShell stream.ShellCloser
+	// Forwards overrides how port forwards reach the cluster, for tests.
+	Forwards stream.ForwardDriver
 	// Settings holds user preferences. Nil keeps them in memory only.
 	Settings *settings.Store
 }
@@ -50,6 +52,7 @@ type Server struct {
 	hangupShell stream.ShellCloser
 	// sessions counts open shells, which http.Server.Shutdown does not track.
 	sessions sync.WaitGroup
+	forwards *stream.ForwardManager
 	// newClient builds dynamic clients for requests outside the hub.
 	newClient resources.ClientFactory
 	settings  *settings.Store
@@ -98,6 +101,11 @@ func New(opts Options) (*Server, error) {
 		hangupShell = stream.Hangup
 	}
 
+	forwardDriver := opts.Forwards
+	if forwardDriver == nil {
+		forwardDriver = stream.ClusterForwards{}
+	}
+
 	store := opts.Settings
 	if store == nil {
 		if store, err = settings.Open(""); err != nil {
@@ -114,6 +122,7 @@ func New(opts Options) (*Server, error) {
 		openLogs:    openLogs,
 		runShell:    runShell,
 		hangupShell: hangupShell,
+		forwards:    stream.NewForwardManager(forwardDriver),
 		newClient:   newClient,
 		settings:    store,
 		cancel:      cancel,
@@ -158,6 +167,7 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	err := s.http.Shutdown(ctx)
 	s.cancel()
 	s.hub.Close()
+	s.forwards.Close(ctx)
 
 	finished := make(chan struct{})
 	go func() {
@@ -187,6 +197,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/contexts/{name}/delete", s.handleAction(deleteObject))
 	mux.HandleFunc("POST /api/v1/contexts/{name}/scale", s.handleAction(scaleObject))
 	mux.HandleFunc("POST /api/v1/contexts/{name}/restart", s.handleAction(restartObject))
+	mux.HandleFunc("POST /api/v1/contexts/{name}/portforwards", s.startForward)
+	mux.HandleFunc("GET /api/v1/portforwards/watch", s.watchForwards)
+	mux.HandleFunc("POST /api/v1/portforwards/{id}/restart", s.restartForward)
+	mux.HandleFunc("POST /api/v1/portforwards/{id}/stop", s.stopForward)
 	mux.HandleFunc("GET /api/v1/settings", s.getSettings)
 	mux.HandleFunc("PUT /api/v1/contexts/{name}/readonly", s.setReadOnly)
 	return mux

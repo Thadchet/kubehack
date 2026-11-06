@@ -32,7 +32,10 @@ func (b actionBody) ref() resources.ObjectRef {
 // rejectReadOnly enforces read-only mode here rather than only hiding buttons,
 // so that no UI path or bug can write to a protected context.
 func (s *Server) rejectReadOnly(w http.ResponseWriter, r *http.Request) bool {
-	name := r.PathValue("name")
+	return s.writeIfReadOnly(w, r.PathValue("name"))
+}
+
+func (s *Server) writeIfReadOnly(w http.ResponseWriter, name string) bool {
 	if !s.settings.IsReadOnly(name) {
 		return false
 	}

@@ -1,8 +1,13 @@
 import { contextColor } from "../cluster/contextColor";
 import { LogPanel } from "../logs/LogPanel";
+import { ForwardPanel } from "../portforward/ForwardPanel";
+import type { PortForwards } from "../portforward/usePortForwards";
 import { TerminalPanel } from "../terminal/TerminalPanel";
 
 export type DockKind = "logs" | "terminal";
+
+// Forwards span clusters, so they get one shared tab rather than one per pod.
+export const forwardsTab = "forwards";
 
 export interface DockTarget {
   id: string;
@@ -19,12 +24,41 @@ interface DockProps {
   activeId?: string;
   onActivate: (id: string) => void;
   onClose: (id: string) => void;
+  showForwards: boolean;
+  portForwards: PortForwards;
 }
 
-export function Dock({ tabs, activeId, onActivate, onClose }: DockProps) {
+export function Dock({
+  tabs,
+  activeId,
+  onActivate,
+  onClose,
+  showForwards,
+  portForwards,
+}: DockProps) {
   return (
-    <section className="dock" aria-label="Logs and terminals">
+    <section className="dock" aria-label="Logs, terminals and port forwards">
       <div className="dock-tabs" role="tablist">
+        {showForwards && (
+          <div className="dock-tab" data-active={activeId === forwardsTab}>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeId === forwardsTab}
+              onClick={() => onActivate(forwardsTab)}
+            >
+              Port forwards
+            </button>
+            <button
+              type="button"
+              className="quiet"
+              aria-label="Close port forwards"
+              onClick={() => onClose(forwardsTab)}
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {tabs.map((tab) => (
           <div key={tab.id} className="dock-tab" data-active={tab.id === activeId}>
             <button
@@ -52,6 +86,9 @@ export function Dock({ tabs, activeId, onActivate, onClose }: DockProps) {
           </div>
         ))}
       </div>
+      {showForwards && (
+        <ForwardPanel portForwards={portForwards} active={activeId === forwardsTab} />
+      )}
       {tabs.map((tab) =>
         tab.kind === "terminal" ? (
           <TerminalPanel key={tab.id} target={tab} active={tab.id === activeId} />

@@ -1,7 +1,15 @@
 import { useMemo, useState } from "react";
 import { contextColor } from "./features/cluster/contextColor";
 import { useCluster } from "./features/cluster/useCluster";
-import { Dock, dockTarget, type DockKind, type DockTarget } from "./features/dock/Dock";
+import {
+  Dock,
+  dockTarget,
+  forwardsTab,
+  type DockKind,
+  type DockTarget,
+} from "./features/dock/Dock";
+import { ForwardAlerts } from "./features/portforward/ForwardAlerts";
+import { usePortForwards } from "./features/portforward/usePortForwards";
 import { resourceId } from "./features/resources/kinds";
 import { ResourceView } from "./features/resources/ResourceView";
 import type { KubeObject } from "./features/resources/useResourceWatch";
@@ -15,7 +23,9 @@ export default function App() {
   const [resourceKey, setResourceKey] = useState(defaultResource);
   const [namespace, setNamespace] = useState("");
   const [dockTabs, setDockTabs] = useState<DockTarget[]>([]);
+  const [showForwards, setShowForwards] = useState(false);
   const [activeTab, setActiveTab] = useState<string>();
+  const portForwards = usePortForwards();
 
   const { contexts, selected, status, resources } = cluster;
   const context = contexts?.find((item) => item.name === selected);
@@ -38,14 +48,30 @@ export default function App() {
     setActiveTab(target.id);
   };
 
+  const openForwards = () => {
+    setShowForwards(true);
+    setActiveTab(forwardsTab);
+  };
+
+  // Closing the tab only hides the list. The forwards keep running.
   const closeTab = (id: string) => {
+    if (id === forwardsTab) {
+      setShowForwards(false);
+      if (activeTab === id) {
+        setActiveTab(dockTabs[0]?.id);
+      }
+      return;
+    }
     const index = dockTabs.findIndex((tab) => tab.id === id);
     const remaining = dockTabs.filter((tab) => tab.id !== id);
     setDockTabs(remaining);
     if (activeTab === id) {
-      setActiveTab(remaining[Math.min(index, remaining.length - 1)]?.id);
+      const next = remaining[Math.min(index, remaining.length - 1)]?.id;
+      setActiveTab(next ?? (showForwards ? forwardsTab : undefined));
     }
   };
+
+  const forwardCount = portForwards.forwards.length;
 
   return (
     <div className="shell">
@@ -68,6 +94,16 @@ export default function App() {
           ))}
         </select>
         <div className="band-right">
+          {forwardCount > 0 && (
+            <button
+              type="button"
+              className="band-forwards"
+              data-testid="forwards-button"
+              onClick={openForwards}
+            >
+              Port forwards: {forwardCount}
+            </button>
+          )}
           {selected && (
             <label className="band-readonly">
               <input
@@ -90,6 +126,8 @@ export default function App() {
           </span>
         </div>
       </header>
+
+      <ForwardAlerts portForwards={portForwards} />
 
       {cluster.settingsError && (
         <p className="banner" role="alert">
@@ -141,13 +179,21 @@ export default function App() {
             namespace={namespace}
             onNamespace={setNamespace}
             onOpenDock={openTab}
+            onForwardStarted={openForwards}
             readOnly={cluster.readOnly}
           />
         </div>
       )}
 
-      {dockTabs.length > 0 && (
-        <Dock tabs={dockTabs} activeId={activeTab} onActivate={setActiveTab} onClose={closeTab} />
+      {(dockTabs.length > 0 || showForwards) && (
+        <Dock
+          tabs={dockTabs}
+          activeId={activeTab}
+          onActivate={setActiveTab}
+          onClose={closeTab}
+          showForwards={showForwards}
+          portForwards={portForwards}
+        />
       )}
     </div>
   );

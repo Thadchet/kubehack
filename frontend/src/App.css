@@ -727,3 +727,96 @@
 .terminal-host .xterm {
   height: 100%;
 }
+
+.band-forwards {
+  padding: 1px 8px;
+  border: 1px solid var(--band-ink);
+  border-radius: 4px;
+  background: none;
+  color: var(--band-ink);
+  cursor: pointer;
+}
+
+.forward-alert {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  background: var(--raised);
+  color: var(--bad);
+}
+
+.forward-alert p {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+}
+
+.forward-alert .action {
+  flex: none;
+  margin-top: 0;
+  color: var(--ink);
+}
+
+.forward-ports {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: -4px 0 10px;
+}
+
+.forward-ports .action {
+  margin-top: 0;
+}
+
+.forward-ports .action[aria-pressed="true"] {
+  border-color: var(--focus);
+}
+
+.forward-panel {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.forward-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.forward-table th {
+  position: sticky;
+  top: 0;
+  padding: 5px 12px;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 400;
+  text-align: left;
+}
+
+.forward-table td {
+  padding: 5px 12px;
+  border-top: 1px solid var(--line);
+  vertical-align: top;
+}
+
+.forward-table tr[data-state="lost"] .forward-address {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.forward-address {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.forward-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+
+.forward-actions .action {
+  margin: 0 0 0 6px;
+}

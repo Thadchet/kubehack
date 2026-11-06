@@ -1,7 +1,15 @@
 import { ApiError } from "../../api";
 
 export interface Failure {
-  kind: "fieldConflict" | "stale" | "gone" | "invalid" | "forbidden" | "readOnly" | "failed";
+  kind:
+    | "fieldConflict"
+    | "stale"
+    | "gone"
+    | "invalid"
+    | "forbidden"
+    | "readOnly"
+    | "portInUse"
+    | "failed";
   message: string;
   conflicts?: { field: string; message: string }[];
 }

@@ -3,6 +3,7 @@ import type { APIResource } from "../cluster/useCluster";
 import { ActionDialog, type ActionType } from "../actions/ActionDialog";
 import type { DockKind } from "../dock/Dock";
 import { EditDialog } from "../editor/EditDialog";
+import { ForwardDialog } from "../portforward/ForwardDialog";
 import { columnsFor, hasPhase } from "./columns";
 import { DetailPanel } from "./DetailPanel";
 import { resourceId, resourceLabel } from "./kinds";
@@ -23,6 +24,7 @@ interface Props {
   namespace: string;
   onNamespace: (namespace: string) => void;
   onOpenDock: (kind: DockKind, pod: KubeObject) => void;
+  onForwardStarted: () => void;
   readOnly: boolean;
 }
 
@@ -42,6 +44,7 @@ export function ResourceView({
   namespace,
   onNamespace,
   onOpenDock,
+  onForwardStarted,
   readOnly,
 }: Props) {
   const scope = resource.namespaced ? namespace : "";
@@ -53,6 +56,7 @@ export function ResourceView({
   const [sort, setSort] = useState(defaultSort);
   const [editing, setEditing] = useState<KubeObject>();
   const [action, setAction] = useState<{ type: ActionType; object: KubeObject }>();
+  const [forwarding, setForwarding] = useState<KubeObject>();
   const filterInput = useRef<HTMLInputElement>(null);
 
   const id = resourceId(resource);
@@ -69,6 +73,7 @@ export function ResourceView({
     setSort(defaultSort);
     setEditing(undefined);
     setAction(undefined);
+    setForwarding(undefined);
   }, [context, id, scope]);
 
   // Turning on read-only closes anything that could still write.
@@ -76,6 +81,7 @@ export function ResourceView({
     if (readOnly) {
       setEditing(undefined);
       setAction(undefined);
+      setForwarding(undefined);
     }
   }, [readOnly]);
 
@@ -90,13 +96,14 @@ export function ResourceView({
   // The panel closes by itself if the object is deleted while open.
   const selectedObject = watch.items.find((item) => objectKey(item) === selected);
   const isPods = id === "/pods";
+  const forwardKind = isPods ? "pod" : id === "/services" ? "service" : undefined;
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       // Keys in the dock belong to it. Esc in particular is everyday input in a
       // terminal, for example in vim.
       const inDock = event.target instanceof Element && event.target.closest(".dock");
-      if (editing || action || inDock) {
+      if (editing || action || forwarding || inDock) {
         return;
       }
       if (event.key === "Escape") {
@@ -124,6 +131,12 @@ export function ResourceView({
         onOpenDock("terminal", selectedObject);
         return;
       }
+      if (event.key === "f" && forwardKind && !readOnly && selectedObject) {
+        // The dialog focuses a field before this key would be typed.
+        event.preventDefault();
+        setForwarding(selectedObject);
+        return;
+      }
       if (event.key === "e" && resource.editable && !readOnly && selectedObject) {
         setEditing(selectedObject);
         return;
@@ -143,9 +156,11 @@ export function ResourceView({
     selected,
     selectedObject,
     isPods,
+    forwardKind,
     onOpenDock,
     editing,
     action,
+    forwarding,
     resource.editable,
     readOnly,
   ]);
@@ -259,6 +274,7 @@ export function ResourceView({
           onOpenShell={
             isPods && !readOnly ? () => onOpenDock("terminal", selectedObject) : undefined
           }
+          onForward={forwardKind && !readOnly ? () => setForwarding(selectedObject) : undefined}
           onEdit={resource.editable && !readOnly ? () => setEditing(selectedObject) : undefined}
           onAction={readOnly ? undefined : (type) => setAction({ type, object: selectedObject })}
         />
@@ -270,6 +286,16 @@ export function ResourceView({
           resource={resource}
           object={editing}
           onClose={() => setEditing(undefined)}
+        />
+      )}
+
+      {forwarding && forwardKind && (
+        <ForwardDialog
+          kind={forwardKind}
+          context={context}
+          object={forwarding}
+          onClose={() => setForwarding(undefined)}
+          onStarted={onForwardStarted}
         />
       )}
 

@@ -17,6 +17,7 @@ interface Props {
   onClose: () => void;
   onOpenLogs?: () => void;
   onOpenShell?: () => void;
+  onForward?: () => void;
   onEdit?: () => void;
   // Missing while the context is read-only.
   onAction?: (type: ActionType) => void;
@@ -184,6 +185,7 @@ export function DetailPanel({
   onClose,
   onOpenLogs,
   onOpenShell,
+  onForward,
   onEdit,
   onAction,
 }: Props) {
@@ -206,6 +208,11 @@ export function DetailPanel({
             {onOpenShell && (
               <button type="button" className="action" onClick={onOpenShell}>
                 Open shell (s)
+              </button>
+            )}
+            {onForward && (
+              <button type="button" className="action" onClick={onForward}>
+                Forward port (f)
               </button>
             )}
             {onEdit && (
