@@ -202,6 +202,10 @@ minimal images.
 **A port is already in use.** Leave **Local port** empty, and Kubehack picks a
 free one.
 
+**In Docker, "executable gke-gcloud-auth-plugin not found".** Your cluster is on
+GKE, and the standard image can't sign in to it. Use the `gke` image from the
+[Docker install steps](#docker).
+
 **macOS says the app is damaged or can't be opened.** Run the `xattr` command from
 the install steps again.
 
