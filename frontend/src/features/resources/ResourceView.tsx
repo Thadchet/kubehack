@@ -8,6 +8,7 @@ import { columnsFor, hasPhase } from "./columns";
 import { DetailPanel } from "./DetailPanel";
 import { resourceId, resourceLabel } from "./kinds";
 import { ResourceTable, sortRows } from "./ResourceTable";
+import { useMetrics, type MetricsKind } from "./useMetrics";
 import {
   objectKey,
   useResourceWatch,
@@ -62,9 +63,12 @@ export function ResourceView({
   const id = resourceId(resource);
   const label = resourceLabel(resource);
   const showPhase = useMemo(() => hasPhase(watch.items), [watch.items]);
+  const metricsKind: MetricsKind | undefined =
+    id === "/pods" ? "pods" : id === "/nodes" ? "nodes" : undefined;
+  const metrics = useMetrics(context, metricsKind, scope);
   const columns = useMemo(
-    () => columnsFor(id, resource.namespaced && !scope, showPhase),
-    [id, resource.namespaced, scope, showPhase],
+    () => columnsFor(id, resource.namespaced && !scope, showPhase, metrics.usage),
+    [id, resource.namespaced, scope, showPhase, metrics.usage],
   );
 
   useEffect(() => {
@@ -243,6 +247,12 @@ export function ResourceView({
           </p>
         )}
 
+        {metrics.note && (
+          <p className="metrics-note" data-testid="metrics-note">
+            {metrics.note}
+          </p>
+        )}
+
         {watch.synced && rows.length === 0 ? (
           <p className="message muted">
             {filter
@@ -269,6 +279,7 @@ export function ResourceView({
           context={context}
           object={selectedObject}
           resource={resource}
+          usage={selected ? metrics.usage?.get(selected) : undefined}
           onClose={() => setSelected(undefined)}
           onOpenLogs={isPods ? () => onOpenDock("logs", selectedObject) : undefined}
           onOpenShell={

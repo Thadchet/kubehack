@@ -192,6 +192,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/contexts/{name}/watch", s.watchResource)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/logs", s.streamLogs)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/exec", s.execShell)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/metrics", s.readMetrics)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/object", s.loadObject)
 	mux.HandleFunc("POST /api/v1/contexts/{name}/apply", s.applyObject)
 	mux.HandleFunc("POST /api/v1/contexts/{name}/delete", s.handleAction(deleteObject))

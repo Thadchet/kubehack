@@ -1,4 +1,5 @@
-import type { KubeObject } from "./useResourceWatch";
+import type { Usage } from "./useMetrics";
+import { objectKey, type KubeObject } from "./useResourceWatch";
 
 export type Tone = "good" | "warn" | "bad" | "neutral";
 
@@ -116,7 +117,8 @@ const replicas: Column[] = [
     label: "Ready",
     width: "80px",
     numeric: true,
-    text: (item) => ratio(number(item, "status", "readyReplicas"), number(item, "spec", "replicas")),
+    text: (item) =>
+      ratio(number(item, "status", "readyReplicas"), number(item, "spec", "replicas")),
     sortValue: (item) => number(item, "status", "readyReplicas"),
     tone: (item) =>
       ratioTone(number(item, "status", "readyReplicas"), number(item, "spec", "replicas")),
@@ -167,7 +169,10 @@ const extraColumns: Record<string, Column[]> = {
       width: "80px",
       numeric: true,
       text: (item) =>
-        ratio(number(item, "status", "numberReady"), number(item, "status", "desiredNumberScheduled")),
+        ratio(
+          number(item, "status", "numberReady"),
+          number(item, "status", "desiredNumberScheduled"),
+        ),
       sortValue: (item) => number(item, "status", "numberReady"),
       tone: (item) =>
         ratioTone(
@@ -213,7 +218,12 @@ const extraColumns: Record<string, Column[]> = {
       text: (item) => String(item.type ?? ""),
       tone: (item) => (item.type === "Warning" ? "warn" : "neutral"),
     },
-    { id: "reason", label: "Reason", width: "150px", text: (item) => String(item.reason ?? "") },
+    {
+      id: "reason",
+      label: "Reason",
+      width: "150px",
+      text: (item) => String(item.reason ?? ""),
+    },
     {
       id: "object",
       label: "Object",
@@ -236,7 +246,106 @@ export function hasPhase(items: KubeObject[]): boolean {
   return items.some((item) => read(item, "status", "phase") !== undefined);
 }
 
-export function columnsFor(id: string, showNamespace: boolean, showPhase: boolean): Column[] {
+const binaryUnits = ["Ki", "Mi", "Gi", "Ti", "Pi", "Ei"];
+const decimalUnits: Record<string, number> = {
+  n: 1e-9,
+  u: 1e-6,
+  m: 1e-3,
+  k: 1e3,
+  M: 1e6,
+  G: 1e9,
+  T: 1e12,
+  P: 1e15,
+  E: 1e18,
+};
+
+// parseQuantity reads the Kubernetes forms that appear in node status, such as
+// "3920m" or "8039412Ki". An unreadable value gives 0.
+export function parseQuantity(value: unknown): number {
+  const match = /^([0-9.]+)([a-zA-Z]*)$/.exec(String(value ?? ""));
+  if (!match) {
+    return 0;
+  }
+  const [, amount, unit] = match;
+  const binary = binaryUnits.indexOf(unit);
+  const scale = binary >= 0 ? 1024 ** (binary + 1) : unit ? decimalUnits[unit] : 1;
+  return scale ? Number(amount) * scale : 0;
+}
+
+export function formatCpu(millicores: number): string {
+  return millicores < 1000 ? `${millicores}m` : (millicores / 1000).toFixed(2);
+}
+
+export function formatMemory(bytes: number): string {
+  const mebibytes = bytes / 1024 ** 2;
+  return mebibytes < 1024 ? `${Math.round(mebibytes)}Mi` : `${(mebibytes / 1024).toFixed(2)}Gi`;
+}
+
+function share(used: number, total: number): number | undefined {
+  return total > 0 ? Math.round((used / total) * 100) : undefined;
+}
+
+function shareTone(percent: number | undefined): Tone {
+  if (percent === undefined || percent < 80) {
+    return "neutral";
+  }
+  return percent < 95 ? "warn" : "bad";
+}
+
+function usageColumns(usage: Map<string, Usage>, isNode: boolean): Column[] {
+  const find = (item: KubeObject) => usage.get(objectKey(item));
+  const column = (
+    id: string,
+    label: string,
+    width: string,
+    field: keyof Usage,
+    format: (value: number) => string,
+    // Allocatable, in the same units as the usage.
+    total: (item: KubeObject) => number,
+  ): Column => {
+    const percent = (item: KubeObject) => {
+      const found = find(item);
+      return found && isNode ? share(found[field], total(item)) : undefined;
+    };
+    return {
+      id,
+      label,
+      width,
+      numeric: true,
+      // Pods that aren't running have no usage, which is different from zero.
+      text: (item) => {
+        const found = find(item);
+        if (!found) {
+          return "";
+        }
+        const value = percent(item);
+        return value === undefined ? format(found[field]) : `${format(found[field])} (${value}%)`;
+      },
+      sortValue: (item) => find(item)?.[field] ?? -1,
+      tone: (item) => shareTone(percent(item)),
+    };
+  };
+  return [
+    column(
+      "cpu",
+      "CPU",
+      isNode ? "110px" : "64px",
+      "cpu",
+      formatCpu,
+      (item) => parseQuantity(read(item, "status", "allocatable", "cpu")) * 1000,
+    ),
+    column("memory", "Memory", isNode ? "120px" : "72px", "memory", formatMemory, (item) =>
+      parseQuantity(read(item, "status", "allocatable", "memory")),
+    ),
+  ];
+}
+
+export function columnsFor(
+  id: string,
+  showNamespace: boolean,
+  showPhase: boolean,
+  usage?: Map<string, Usage>,
+): Column[] {
   const name: Column = {
     id: "name",
     label: "Name",
@@ -262,6 +371,7 @@ export function columnsFor(id: string, showNamespace: boolean, showPhase: boolea
     name,
     ...(showNamespace ? [namespace] : []),
     ...(extraColumns[id] ?? (showPhase ? [genericStatus] : [])),
+    ...(usage ? usageColumns(usage, id === "/nodes") : []),
     age,
   ];
 }

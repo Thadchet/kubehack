@@ -2,8 +2,9 @@ import { useMemo, useState } from "react";
 import { stringify } from "yaml";
 import type { ActionType } from "../actions/ActionDialog";
 import type { APIResource } from "../cluster/useCluster";
-import { formatAge } from "./columns";
+import { formatAge, formatCpu, formatMemory } from "./columns";
 import { SecretValues } from "./SecretValues";
+import type { ObjectUsage } from "./useMetrics";
 import { useResourceWatch, type KubeObject, type ResourceRef } from "./useResourceWatch";
 
 const eventsRef: ResourceRef = { group: "", version: "v1", resource: "events" };
@@ -14,6 +15,7 @@ interface Props {
   context: string;
   object: KubeObject;
   resource: APIResource;
+  usage?: ObjectUsage;
   onClose: () => void;
   onOpenLogs?: () => void;
   onOpenShell?: () => void;
@@ -53,9 +55,14 @@ interface OverviewProps {
   context: string;
   resource: APIResource;
   object: KubeObject;
+  usage?: ObjectUsage;
 }
 
-function Overview({ context, resource, object }: OverviewProps) {
+function usageText(usage: { cpu: number; memory: number }): string {
+  return `CPU ${formatCpu(usage.cpu)}, memory ${formatMemory(usage.memory)}`;
+}
+
+function Overview({ context, resource, object, usage }: OverviewProps) {
   const { metadata } = object;
   const status = object.status as Fields | undefined;
   const conditions = fields(status?.conditions);
@@ -72,10 +79,15 @@ function Overview({ context, resource, object }: OverviewProps) {
               <dd>{metadata.namespace}</dd>
             </>
           )}
+          {usage && (
+            <>
+              <dt>Using</dt>
+              <dd data-testid="detail-usage">{usageText(usage)}</dd>
+            </>
+          )}
           <dt>Created</dt>
           <dd>
-            {metadata.creationTimestamp &&
-              new Date(metadata.creationTimestamp).toLocaleString()}
+            {metadata.creationTimestamp && new Date(metadata.creationTimestamp).toLocaleString()}
           </dd>
           {metadata.ownerReferences?.map((owner) => (
             <div className="fact-row" key={`${owner.kind}/${owner.name}`}>
@@ -94,17 +106,21 @@ function Overview({ context, resource, object }: OverviewProps) {
         <section className="detail-section">
           <h3>Containers</h3>
           <ul className="plain">
-            {containers.map((container) => (
-              <li key={String(container.name)}>
-                <strong>{String(container.name)}</strong>
-                <span data-tone={container.ready ? "good" : "warn"}>
-                  {container.ready ? " ready" : " not ready"}
-                </span>
-                {Number(container.restartCount) > 0 &&
-                  `, ${String(container.restartCount)} restarts`}
-                <div className="muted wrap">{String(container.image)}</div>
-              </li>
-            ))}
+            {containers.map((container) => {
+              const used = usage?.containers?.find((item) => item.name === container.name);
+              return (
+                <li key={String(container.name)}>
+                  <strong>{String(container.name)}</strong>
+                  <span data-tone={container.ready ? "good" : "warn"}>
+                    {container.ready ? " ready" : " not ready"}
+                  </span>
+                  {Number(container.restartCount) > 0 &&
+                    `, ${String(container.restartCount)} restarts`}
+                  <div className="muted wrap">{String(container.image)}</div>
+                  {used && <div className="muted">{usageText(used)}</div>}
+                </li>
+              );
+            })}
           </ul>
         </section>
       )}
@@ -148,13 +164,19 @@ function Events({ context, object }: { context: string; object: KubeObject }) {
   );
 
   if (watch.error) {
-    return <p className="message" data-tone="bad">{watch.error}</p>;
+    return (
+      <p className="message" data-tone="bad">
+        {watch.error}
+      </p>
+    );
   }
   if (!watch.synced) {
     return <p className="message muted">Loading events</p>;
   }
   if (events.length === 0) {
-    return <p className="message muted">No recent events. Kubernetes keeps them for about an hour.</p>;
+    return (
+      <p className="message muted">No recent events. Kubernetes keeps them for about an hour.</p>
+    );
   }
   return (
     <ul className="events">
@@ -165,7 +187,9 @@ function Events({ context, object }: { context: string; object: KubeObject }) {
               {String(event.reason)}
             </strong>
             <span className="muted"> {formatAge(eventTime(event), now)} ago</span>
-            {Number(event.count) > 1 && <span className="muted">, {String(event.count)} times</span>}
+            {Number(event.count) > 1 && (
+              <span className="muted">, {String(event.count)} times</span>
+            )}
           </div>
           <div className="wrap">{String(event.message)}</div>
         </li>
@@ -182,6 +206,7 @@ export function DetailPanel({
   context,
   object,
   resource,
+  usage,
   onClose,
   onOpenLogs,
   onOpenShell,
@@ -260,7 +285,9 @@ export function DetailPanel({
         ))}
       </div>
       <div className="detail-body">
-        {tab === "overview" && <Overview context={context} resource={resource} object={object} />}
+        {tab === "overview" && (
+          <Overview context={context} resource={resource} object={object} usage={usage} />
+        )}
         {tab === "yaml" && (
           <>
             {object.kind === "Secret" && (

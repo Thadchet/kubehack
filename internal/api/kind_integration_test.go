@@ -19,6 +19,7 @@ import (
 
 	"github.com/coder/websocket"
 
+	"kubehack/internal/metrics"
 	"kubehack/internal/resources"
 	"kubehack/internal/settings"
 )
@@ -815,4 +816,86 @@ func TestKindShellReportsImageWithoutShell(t *testing.T) {
 	if exit.Code == 0 {
 		t.Errorf("exit = %+v", exit)
 	}
+}
+
+func kindMetrics(t *testing.T, server *Server, query string) metrics.Snapshot {
+	t.Helper()
+	request, err := http.NewRequest(http.MethodGet,
+		server.BaseURL()+"/api/v1/contexts/"+kindContext+"/metrics?"+query, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer "+server.Token())
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d", response.StatusCode)
+	}
+	var snapshot metrics.Snapshot
+	if err := json.NewDecoder(response.Body).Decode(&snapshot); err != nil {
+		t.Fatal(err)
+	}
+	return snapshot
+}
+
+func metricsServerState(t *testing.T) string {
+	t.Helper()
+	output, err := exec.Command("kubectl", "--context", kindContext, "get", "apiservice",
+		"v1beta1.metrics.k8s.io", "-o", `jsonpath={.status.conditions[?(@.type=="Available")].status}`).CombinedOutput()
+	if err != nil {
+		return "absent"
+	}
+	return string(output)
+}
+
+func TestKindMetricsWithoutServer(t *testing.T) {
+	if metricsServerState(t) != "absent" {
+		t.Skip("metrics-server is installed")
+	}
+	server := startKindServer(t)
+	for _, query := range []string{"kind=pods", "kind=nodes"} {
+		snapshot := kindMetrics(t, server, query)
+		if snapshot.Available || snapshot.Reason != metrics.NotInstalled {
+			t.Fatalf("%s: %+v", query, snapshot)
+		}
+	}
+}
+
+func TestKindMetricsAgreeWithKubectlTop(t *testing.T) {
+	if metricsServerState(t) != "True" {
+		t.Skip("metrics-server is not running")
+	}
+	server := startKindServer(t)
+
+	nodes := kindMetrics(t, server, "kind=nodes")
+	if !nodes.Available || len(nodes.Items) != 1 || nodes.Items[0].CPU <= 0 || nodes.Items[0].Memory <= 0 {
+		t.Fatalf("nodes = %+v", nodes)
+	}
+
+	pods := kindMetrics(t, server, "kind=pods&namespace=kube-system")
+	if !pods.Available || len(pods.Items) == 0 {
+		t.Fatalf("pods = %+v", pods)
+	}
+	top := strings.Fields(kubectl(t, "", "top", "pod", "-n", "kube-system", "--no-headers", "etcd-kubehack-control-plane"))
+	wantMemory, err := strconv.ParseInt(strings.TrimSuffix(top[2], "Mi"), 10, 64)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range pods.Items {
+		if item.Namespace != "kube-system" {
+			t.Fatalf("item from %s", item.Namespace)
+		}
+		if item.Name != "etcd-kubehack-control-plane" {
+			continue
+		}
+		// Both read the same sample unless a new one lands between the calls.
+		if got := item.Memory >> 20; got < wantMemory*8/10 || got > wantMemory*12/10 {
+			t.Fatalf("memory = %dMi, kubectl says %dMi", got, wantMemory)
+		}
+		return
+	}
+	t.Fatal("etcd pod missing")
 }

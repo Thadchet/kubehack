@@ -820,3 +820,10 @@
 .forward-actions .action {
   margin: 0 0 0 6px;
 }
+
+.metrics-note {
+  flex: none;
+  margin: 0;
+  padding: 2px 16px 6px;
+  color: var(--muted);
+}
