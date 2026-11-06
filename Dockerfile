@@ -11,7 +11,8 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS server
 ARG TARGETOS TARGETARCH
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+# Retried, because a dropped download would otherwise fail a whole release.
+RUN go mod download || go mod download || go mod download
 COPY cmd/kubehack-docker cmd/kubehack-docker
 COPY internal internal
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" -o /kubehack-docker ./cmd/kubehack-docker
