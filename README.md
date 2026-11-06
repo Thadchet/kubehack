@@ -15,7 +15,7 @@ talks to your clusters and any chart source you choose.
 - Browse every kind of resource, including custom ones, with live updates
 - Read and search pod logs
 - Open a terminal inside a container
-- Edit YAML and review a diff before applying it
+- Edit YAML and save it, with an optional diff to review first
 - Edit ConfigMap and Secret values as readable JSON, already decoded
 - Scale, restart and delete, with a confirmation first
 - Forward a port from a pod or service to your computer
@@ -33,7 +33,7 @@ tools.
 | Option | Best for | Status |
 | --- | --- | --- |
 | [Mac app](#mac) | Everyday use on Apple silicon or Intel | Main platform |
-| [Docker](#docker) | Trying Kubehack without installing an app | Tested on a Mac with Docker Desktop |
+| [Docker](#docker) | Trying Kubehack without installing an app | Tested on a Mac with Docker Desktop, and on Linux with `./run.sh docker` |
 | [Windows app](#windows) | Everyday use on Windows | Not yet tested on a real PC |
 
 ### Mac
@@ -68,8 +68,7 @@ To update on either system, quit Kubehack and repeat these steps.
 
 Use this if you'd rather not install the app. Kubehack opens in your browser
 instead of its own window. You only need
-[Docker](https://www.docker.com/products/docker-desktop/) running. This has only
-been tested on a Mac with Docker Desktop.
+[Docker](https://www.docker.com/products/docker-desktop/) running.
 
 ```sh
 docker run --rm --pull always -p 127.0.0.1:8765:8765 \
@@ -142,7 +141,7 @@ details and events.
 | Logs | Follow a pod's logs in the panel at the bottom |
 | Shell | Open a terminal in the container |
 | Forward | Reach a pod or service from your computer, for example in your browser |
-| Edit | Change the YAML, then review the changes before applying them |
+| Edit | Change the YAML, then select **Save**, or **Preview changes** to review them first |
 | Edit a ConfigMap or Secret | Change the values as JSON. Secret values are decoded and encoded for you. Switch to YAML for labels and other fields |
 | Scale | Change the number of replicas |
 | Restart | Replace the pods, like `kubectl rollout restart` |
