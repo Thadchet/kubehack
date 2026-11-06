@@ -1,5 +1,6 @@
-import { useMemo, useState } from "react";
-import { contextColor } from "./features/cluster/contextColor";
+import { Cable, ChevronDown } from "lucide-react";
+import { useLayoutEffect, useMemo, useState } from "react";
+import { contextColor, contextHue } from "./features/cluster/contextColor";
 import { useCluster } from "./features/cluster/useCluster";
 import {
   Dock,
@@ -38,6 +39,13 @@ export default function App() {
   );
 
   const showHelm = resourceKey === helmReleasesId;
+
+  // Every surface derives from this, so the whole app shows which cluster is open.
+  useLayoutEffect(() => {
+    if (selected) {
+      document.documentElement.style.setProperty("--hue", String(contextHue(selected)));
+    }
+  }, [selected]);
 
   const selectContext = (name: string) => {
     // A namespace rarely exists under the same name in another cluster.
@@ -78,24 +86,40 @@ export default function App() {
 
   return (
     <div className="shell">
-      <header
-        className="band"
-        style={selected ? { backgroundColor: contextColor(selected) } : undefined}
-      >
-        <select
-          className="band-context"
-          aria-label="Cluster context"
-          data-testid="context-select"
-          value={selected}
-          disabled={!contexts?.length}
-          onChange={(event) => selectContext(event.target.value)}
+      <header className="band">
+        <div
+          className="band-cluster"
+          style={selected ? { backgroundColor: contextColor(selected) } : undefined}
         >
-          {contexts?.map((item) => (
-            <option key={item.name} value={item.name}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          <select
+            className="band-context"
+            aria-label="Cluster context"
+            data-testid="context-select"
+            value={selected}
+            disabled={!contexts?.length}
+            onChange={(event) => selectContext(event.target.value)}
+          >
+            {contexts?.map((item) => (
+              <option key={item.name} value={item.name}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} aria-hidden="true" />
+        </div>
+        <span
+          className="band-status"
+          data-testid="cluster-status"
+          data-tone={status ? (status.reachable ? "good" : "bad") : undefined}
+        >
+          {!selected
+            ? ""
+            : !status
+              ? "Connecting"
+              : status.reachable
+                ? status.version
+                : "Unreachable"}
+        </span>
         <div className="band-right">
           {forwardCount > 0 && (
             <button
@@ -104,11 +128,12 @@ export default function App() {
               data-testid="forwards-button"
               onClick={openForwards}
             >
+              <Cable size={14} aria-hidden="true" />
               Port forwards: {forwardCount}
             </button>
           )}
           {selected && (
-            <label className="band-readonly">
+            <label className="band-readonly" data-on={cluster.readOnly}>
               <input
                 type="checkbox"
                 data-testid="read-only"
@@ -118,56 +143,50 @@ export default function App() {
               Read-only
             </label>
           )}
-          <span className="band-status" data-testid="cluster-status">
-            {!selected
-              ? ""
-              : !status
-                ? "Connecting"
-                : status.reachable
-                  ? status.version
-                  : "Unreachable"}
-          </span>
         </div>
       </header>
 
-      <ForwardAlerts portForwards={portForwards} />
+      <div className="notices">
+        <ForwardAlerts portForwards={portForwards} />
 
-      {cluster.settingsError && (
-        <p className="banner" role="alert">
-          Could not save read-only mode. {cluster.settingsError}
-        </p>
-      )}
+        {cluster.settingsError && (
+          <p className="banner" role="alert">
+            Could not save read-only mode. {cluster.settingsError}
+          </p>
+        )}
 
-      {cluster.contextsError && (
-        <p className="message" data-tone="bad">
-          Could not read kubeconfig. {cluster.contextsError}
-        </p>
-      )}
+        {cluster.contextsError && (
+          <p className="message" data-tone="bad">
+            Could not read kubeconfig. {cluster.contextsError}
+          </p>
+        )}
 
-      {contexts?.length === 0 && (
-        <p className="message">
-          No clusters found in kubeconfig. Add one with your provider's CLI, then reopen Kubehack.
-        </p>
-      )}
+        {contexts?.length === 0 && (
+          <p className="message">
+            No clusters found in kubeconfig. Add one with your provider's CLI, then reopen Kubehack.
+          </p>
+        )}
 
-      {status && !status.reachable && (
-        <div className="message">
-          <p>Could not reach {context?.server || selected}.</p>
-          <p className="wrap muted">{status.error}</p>
-          <button type="button" onClick={cluster.retry}>
-            Try again
-          </button>
-        </div>
-      )}
+        {status && !status.reachable && (
+          <div className="message">
+            <p>Could not reach {context?.server || selected}.</p>
+            <p className="wrap muted">{status.error}</p>
+            <button type="button" onClick={cluster.retry}>
+              Try again
+            </button>
+          </div>
+        )}
 
-      {cluster.resourcesError && (
-        <div className="message">
-          <p className="wrap">{cluster.resourcesError}</p>
-          <button type="button" onClick={cluster.retry}>
-            Try again
-          </button>
-        </div>
-      )}
+        {cluster.resourcesError && (
+          <div className="message">
+            <p className="wrap">{cluster.resourcesError}</p>
+            <button type="button" onClick={cluster.retry}>
+              Try again
+            </button>
+          </div>
+        )}
+
+      </div>
 
       {resources && resource && (
         <div className="workspace">

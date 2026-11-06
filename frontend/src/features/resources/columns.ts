@@ -155,7 +155,7 @@ const extraColumns: Record<string, Column[]> = {
     {
       id: "node",
       label: "Node",
-      width: "minmax(100px, 0.6fr)",
+      width: "minmax(70px, 0.6fr)",
       text: (item) => String(read(item, "spec", "nodeName") ?? ""),
     },
   ],
@@ -349,13 +349,13 @@ export function columnsFor(
   const name: Column = {
     id: "name",
     label: "Name",
-    width: "minmax(180px, 1.4fr)",
+    width: "minmax(140px, 1.4fr)",
     text: (item) => item.metadata.name,
   };
   const namespace: Column = {
     id: "namespace",
     label: "Namespace",
-    width: "minmax(100px, 0.5fr)",
+    width: "minmax(80px, 0.5fr)",
     text: (item) => item.metadata.namespace ?? "",
   };
   const age: Column = {

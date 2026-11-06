@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Column } from "./columns";
 import { objectKey, type KubeObject } from "./useResourceWatch";
 
-const rowHeight = 30;
+const rowHeight = 34;
 const clockInterval = 30000;
 
 interface Sort {
@@ -65,7 +65,11 @@ export function ResourceTable({ columns, rows, selected, onSelect, sort, onSort 
     }
   }, [selectedIndex, virtualizer]);
 
-  const tracks = columns.map((column) => column.width).join(" ");
+  // Fixed tracks may shrink, so a narrow window ellipsizes rather than pushing the
+  // last columns out of view.
+  const tracks = columns
+    .map(({ width }) => (width.endsWith("px") ? `minmax(0, ${width})` : width))
+    .join(" ");
 
   return (
     <div className="table" role="grid" aria-rowcount={rows.length}>

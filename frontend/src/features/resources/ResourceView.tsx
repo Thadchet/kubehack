@@ -55,7 +55,7 @@ export function ResourceView({
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<string>();
   const [sort, setSort] = useState(defaultSort);
-  const [editing, setEditing] = useState<KubeObject>();
+  const [editing, setEditing] = useState<{ object: KubeObject; revealed: boolean }>();
   const [action, setAction] = useState<{ type: ActionType; object: KubeObject }>();
   const [forwarding, setForwarding] = useState<KubeObject>();
   const filterInput = useRef<HTMLInputElement>(null);
@@ -142,7 +142,7 @@ export function ResourceView({
         return;
       }
       if (event.key === "e" && resource.editable && !readOnly && selectedObject) {
-        setEditing(selectedObject);
+        setEditing({ object: selectedObject, revealed: false });
         return;
       }
       const step = { ArrowDown: 1, j: 1, ArrowUp: -1, k: -1 }[event.key];
@@ -286,7 +286,11 @@ export function ResourceView({
             isPods && !readOnly ? () => onOpenDock("terminal", selectedObject) : undefined
           }
           onForward={forwardKind && !readOnly ? () => setForwarding(selectedObject) : undefined}
-          onEdit={resource.editable && !readOnly ? () => setEditing(selectedObject) : undefined}
+          onEdit={
+            resource.editable && !readOnly
+              ? (revealed = false) => setEditing({ object: selectedObject, revealed })
+              : undefined
+          }
           onAction={readOnly ? undefined : (type) => setAction({ type, object: selectedObject })}
         />
       )}
@@ -295,7 +299,8 @@ export function ResourceView({
         <EditDialog
           context={context}
           resource={resource}
-          object={editing}
+          object={editing.object}
+          revealed={editing.revealed}
           onClose={() => setEditing(undefined)}
         />
       )}

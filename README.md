@@ -14,6 +14,7 @@ own clusters and any chart source you choose.
 - Read and search pod logs
 - Open a terminal inside a container
 - Edit YAML and review a diff before applying it
+- Edit ConfigMap and Secret values as readable JSON, already decoded
 - Scale, restart and delete, with a confirmation first
 - Forward a port from a pod or service to your Mac
 - See CPU and memory usage
@@ -58,10 +59,10 @@ To update on either system, quit Kubehack and repeat these steps.
 ## Your first five minutes
 
 **Choose a cluster.** Use the menu at the top left. Each cluster gets its own
-color, so you can see which one you're in.
+color, and the whole app takes on that color, so you can see which one you're in.
 
 **Protect anything important.** Kubehack can change and delete real resources.
-Tick **Read-only** at the top right for any cluster you only want to look at,
+Turn on **Read-only** at the top right for any cluster you only want to look at,
 such as production. This blocks every change, shell and new port forward, and
 Kubehack remembers it for that cluster.
 
@@ -73,10 +74,11 @@ details and events.
 
 | Button | What it does |
 | --- | --- |
-| View logs | Follow a pod's logs in the panel at the bottom |
-| Open shell | Open a terminal in the container |
-| Forward port | Reach a pod or service from your Mac, for example in your browser |
+| Logs | Follow a pod's logs in the panel at the bottom |
+| Shell | Open a terminal in the container |
+| Forward | Reach a pod or service from your Mac, for example in your browser |
 | Edit | Change the YAML, then review the changes before applying them |
+| Edit a ConfigMap or Secret | Change the values as JSON. Secret values are decoded and encoded for you. Switch to YAML for labels and other fields |
 | Scale | Change the number of replicas |
 | Restart | Replace the pods, like `kubectl rollout restart` |
 | Delete | Delete the object, after you type its name to confirm |
@@ -108,6 +110,8 @@ upgrade it, roll it back to an earlier revision, or uninstall it.
   says why and offers **Reconnect**.
 - Any program on your Mac can reach a forwarded port, as with
   `kubectl port-forward`. Other computers can't.
+- Deleting a ConfigMap or Secret key that another tool manages, such as Helm or
+  `kubectl apply`, leaves it in place. The review screen tells you when this happens.
 - Upgrading a Helm release replaces all its values with what's in the editor. If
   you delete a line, that value goes back to the chart's default.
 - Helm values appear on screen when you upgrade, so passwords in them are visible.

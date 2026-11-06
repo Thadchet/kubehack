@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { apiGet } from "../../api";
 import { toFailure } from "../actions/failure";
@@ -87,7 +88,7 @@ export function ReleasePanel({
           </div>
         </div>
         <button type="button" className="quiet" onClick={onClose} aria-label="Close details">
-          ✕
+          <X size={16} aria-hidden="true" />
         </button>
       </header>
       <div className="detail-body">

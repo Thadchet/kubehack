@@ -1,6 +1,8 @@
+import { Ship } from "lucide-react";
 import { Fragment, useMemo, useState } from "react";
 import type { APIResource } from "../cluster/useCluster";
 import { groupResources, resourceId, resourceLabel } from "./kinds";
+import { resourceIcon } from "./resourceIcons";
 
 interface Props {
   resources: APIResource[];
@@ -36,7 +38,8 @@ export function Sidebar({ resources, selected, onSelect }: Props) {
         data-testid="helm-releases"
         onClick={() => onSelect(helmReleasesId)}
       >
-        Releases
+        <Ship size={15} aria-hidden="true" />
+        <span>Releases</span>
       </button>
     </section>
   );
@@ -57,17 +60,21 @@ export function Sidebar({ resources, selected, onSelect }: Props) {
           <Fragment key={section.title}>
             <section>
               <h2>{section.title}</h2>
-              {section.resources.map((item) => (
-                <button
-                  key={resourceId(item)}
-                  type="button"
-                  title={item.group || "core"}
-                  aria-current={resourceId(item) === selected ? "page" : undefined}
-                  onClick={() => onSelect(resourceId(item))}
-                >
-                  {resourceLabel(item)}
-                </button>
-              ))}
+              {section.resources.map((item) => {
+                const Icon = resourceIcon(resourceId(item));
+                return (
+                  <button
+                    key={resourceId(item)}
+                    type="button"
+                    title={item.group || "core"}
+                    aria-current={resourceId(item) === selected ? "page" : undefined}
+                    onClick={() => onSelect(resourceId(item))}
+                  >
+                    <Icon size={15} aria-hidden="true" />
+                    <span>{resourceLabel(item)}</span>
+                  </button>
+                );
+              })}
             </section>
             {index === 0 && showHelm && helmSection}
           </Fragment>
