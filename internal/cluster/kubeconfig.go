@@ -17,7 +17,14 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-const probeTimeout = 10 * time.Second
+const (
+	probeTimeout = 10 * time.Second
+
+	gkePlugin = "gke-gcloud-auth-plugin"
+	// gkeImageHint replaces advice to install the plugin, which can't help in a
+	// container. client-go shows it when the plugin is missing.
+	gkeImageHint = "GKE clusters need the gke image. See https://github.com/Thadchet/kubehack#docker"
+)
 
 // ErrContextNotFound is returned for a context that is not in kubeconfig.
 var ErrContextNotFound = errors.New("context not found")
@@ -170,6 +177,9 @@ func WriteContainerKubeconfig(path, hostAddress string) error {
 	for _, user := range config.AuthInfos {
 		if user.Exec != nil {
 			user.Exec.Command = user.Exec.Command[strings.LastIndexAny(user.Exec.Command, `/\`)+1:]
+			if user.Exec.Command == gkePlugin {
+				user.Exec.InstallHint = gkeImageHint
+			}
 		}
 	}
 

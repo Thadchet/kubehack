@@ -233,6 +233,13 @@ users:
       apiVersion: client.authentication.k8s.io/v1
       command: /opt/homebrew/bin/some-plugin
       interactiveMode: Never
+- name: gke
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      command: /opt/homebrew/bin/gke-gcloud-auth-plugin
+      installHint: Install it from elsewhere
+      interactiveMode: Never
 - name: bare
   user:
     exec:
@@ -269,6 +276,9 @@ contexts:
 	}
 	if command := got.AuthInfos["plugin"].Exec.Command; command != "some-plugin" {
 		t.Errorf("plugin command = %q", command)
+	}
+	if hint := got.AuthInfos["gke"].Exec.InstallHint; hint != gkeImageHint {
+		t.Errorf("gke hint = %q", hint)
 	}
 	if command := got.AuthInfos["bare"].Exec.Command; command != "other-plugin" {
 		t.Errorf("bare command = %q", command)
