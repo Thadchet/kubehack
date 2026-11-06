@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"kubehack/internal/cluster"
+	"kubehack/internal/helm"
 	"kubehack/internal/resources"
 	"kubehack/internal/settings"
 	"kubehack/internal/stream"
@@ -36,6 +37,8 @@ type Options struct {
 	HangupShell stream.ShellCloser
 	// Forwards overrides how port forwards reach the cluster, for tests.
 	Forwards stream.ForwardDriver
+	// Helm overrides how releases are managed, for tests.
+	Helm helm.Client
 	// Settings holds user preferences. Nil keeps them in memory only.
 	Settings *settings.Store
 }
@@ -53,9 +56,12 @@ type Server struct {
 	// sessions counts open shells, which http.Server.Shutdown does not track.
 	sessions sync.WaitGroup
 	forwards *stream.ForwardManager
+	helm     helm.Client
 	// newClient builds dynamic clients for requests outside the hub.
 	newClient resources.ClientFactory
 	settings  *settings.Store
+	// baseCtx ends when the app quits. Work that must outlive a request uses it.
+	baseCtx context.Context
 	// cancel ends WebSocket handlers, which http.Server.Shutdown does not track.
 	cancel context.CancelFunc
 }
@@ -106,6 +112,11 @@ func New(opts Options) (*Server, error) {
 		forwardDriver = stream.ClusterForwards{}
 	}
 
+	var helmClient helm.Client = helm.New()
+	if opts.Helm != nil {
+		helmClient = opts.Helm
+	}
+
 	store := opts.Settings
 	if store == nil {
 		if store, err = settings.Open(""); err != nil {
@@ -123,6 +134,8 @@ func New(opts Options) (*Server, error) {
 		runShell:    runShell,
 		hangupShell: hangupShell,
 		forwards:    stream.NewForwardManager(forwardDriver),
+		helm:        helmClient,
+		baseCtx:     baseCtx,
 		newClient:   newClient,
 		settings:    store,
 		cancel:      cancel,
@@ -164,8 +177,10 @@ func (s *Server) Serve() error {
 
 // Shutdown stops the server gracefully.
 func (s *Server) Shutdown(ctx context.Context) error {
-	err := s.http.Shutdown(ctx)
+	// This comes first so that a running Helm operation gets to record that it
+	// stopped, while Shutdown is still waiting for its request.
 	s.cancel()
+	err := s.http.Shutdown(ctx)
 	s.hub.Close()
 	s.forwards.Close(ctx)
 
@@ -202,6 +217,13 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/portforwards/watch", s.watchForwards)
 	mux.HandleFunc("POST /api/v1/portforwards/{id}/restart", s.restartForward)
 	mux.HandleFunc("POST /api/v1/portforwards/{id}/stop", s.stopForward)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/helm/releases", s.listReleases)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/helm/releases/{namespace}/{release}", s.releaseDetail)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/helm/releases/{namespace}/{release}/values", s.releaseValues)
+	mux.HandleFunc("POST /api/v1/contexts/{name}/helm/install", s.installRelease)
+	mux.HandleFunc("POST /api/v1/contexts/{name}/helm/upgrade", s.upgradeRelease)
+	mux.HandleFunc("POST /api/v1/contexts/{name}/helm/rollback", s.rollbackRelease)
+	mux.HandleFunc("POST /api/v1/contexts/{name}/helm/uninstall", s.uninstallRelease)
 	mux.HandleFunc("GET /api/v1/settings", s.getSettings)
 	mux.HandleFunc("PUT /api/v1/contexts/{name}/readonly", s.setReadOnly)
 	return mux

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import type { APIResource } from "../cluster/useCluster";
 import { groupResources, resourceId, resourceLabel } from "./kinds";
 
@@ -7,6 +7,9 @@ interface Props {
   selected?: string;
   onSelect: (id: string) => void;
 }
+
+// Helm releases aren't an API resource, but they are chosen in the same place.
+export const helmReleasesId = "helm/releases";
 
 export function Sidebar({ resources, selected, onSelect }: Props) {
   const [query, setQuery] = useState("");
@@ -22,6 +25,22 @@ export function Sidebar({ resources, selected, onSelect }: Props) {
     return groupResources(matching);
   }, [resources, query]);
 
+  const needle = query.trim().toLowerCase();
+  const showHelm = "helm releases".includes(needle);
+  const helmSection = (
+    <section>
+      <h2>Helm</h2>
+      <button
+        type="button"
+        aria-current={selected === helmReleasesId ? "page" : undefined}
+        data-testid="helm-releases"
+        onClick={() => onSelect(helmReleasesId)}
+      >
+        Releases
+      </button>
+    </section>
+  );
+
   return (
     <nav className="sidebar" aria-label="Resource types">
       <input
@@ -33,23 +52,29 @@ export function Sidebar({ resources, selected, onSelect }: Props) {
         onChange={(event) => setQuery(event.target.value)}
       />
       <div className="sidebar-list">
-        {sections.map((section) => (
-          <section key={section.title}>
-            <h2>{section.title}</h2>
-            {section.resources.map((item) => (
-              <button
-                key={resourceId(item)}
-                type="button"
-                title={item.group || "core"}
-                aria-current={resourceId(item) === selected ? "page" : undefined}
-                onClick={() => onSelect(resourceId(item))}
-              >
-                {resourceLabel(item)}
-              </button>
-            ))}
-          </section>
+        {sections.length === 0 && showHelm && helmSection}
+        {sections.map((section, index) => (
+          <Fragment key={section.title}>
+            <section>
+              <h2>{section.title}</h2>
+              {section.resources.map((item) => (
+                <button
+                  key={resourceId(item)}
+                  type="button"
+                  title={item.group || "core"}
+                  aria-current={resourceId(item) === selected ? "page" : undefined}
+                  onClick={() => onSelect(resourceId(item))}
+                >
+                  {resourceLabel(item)}
+                </button>
+              ))}
+            </section>
+            {index === 0 && showHelm && helmSection}
+          </Fragment>
         ))}
-        {sections.length === 0 && <p className="muted">No resource type matches “{query}”.</p>}
+        {sections.length === 0 && !showHelm && (
+          <p className="muted">No resource type matches “{query}”.</p>
+        )}
       </div>
     </nav>
   );

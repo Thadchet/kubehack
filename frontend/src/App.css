@@ -827,3 +827,59 @@
   padding: 2px 16px 6px;
   color: var(--muted);
 }
+
+.helm-install {
+  flex: none;
+  margin-top: 0;
+}
+
+.helm-fields {
+  display: grid;
+  flex: none;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 8px 16px;
+  padding: 0 16px 10px;
+}
+
+.helm-fields > label {
+  display: grid;
+  gap: 4px;
+}
+
+.helm-fields input:not([type="checkbox"]) {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+}
+
+.helm-options {
+  display: flex;
+  flex-wrap: wrap;
+  grid-column: 1 / -1;
+  gap: 4px 20px;
+}
+
+.helm-options label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.helm-revision {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.helm-revision .action {
+  flex: none;
+  margin-top: 0;
+}
+
+.helm-values-label {
+  flex: none;
+  margin: 0;
+  padding: 0 16px 4px;
+}

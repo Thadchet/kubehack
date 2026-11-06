@@ -8,12 +8,13 @@ import {
   type DockKind,
   type DockTarget,
 } from "./features/dock/Dock";
+import { HelmView } from "./features/helm/HelmView";
 import { ForwardAlerts } from "./features/portforward/ForwardAlerts";
 import { usePortForwards } from "./features/portforward/usePortForwards";
 import { resourceId } from "./features/resources/kinds";
 import { ResourceView } from "./features/resources/ResourceView";
 import type { KubeObject } from "./features/resources/useResourceWatch";
-import { Sidebar } from "./features/resources/Sidebar";
+import { helmReleasesId, Sidebar } from "./features/resources/Sidebar";
 import "./App.css";
 
 const defaultResource = "/pods";
@@ -35,6 +36,8 @@ export default function App() {
       resources?.find((item) => resourceId(item) === defaultResource),
     [resources, resourceKey],
   );
+
+  const showHelm = resourceKey === helmReleasesId;
 
   const selectContext = (name: string) => {
     // A namespace rarely exists under the same name in another cluster.
@@ -170,18 +173,27 @@ export default function App() {
         <div className="workspace">
           <Sidebar
             resources={resources}
-            selected={resourceId(resource)}
+            selected={showHelm ? helmReleasesId : resourceId(resource)}
             onSelect={setResourceKey}
           />
-          <ResourceView
-            context={selected}
-            resource={resource}
-            namespace={namespace}
-            onNamespace={setNamespace}
-            onOpenDock={openTab}
-            onForwardStarted={openForwards}
-            readOnly={cluster.readOnly}
-          />
+          {showHelm ? (
+            <HelmView
+              context={selected}
+              namespace={namespace}
+              onNamespace={setNamespace}
+              readOnly={cluster.readOnly}
+            />
+          ) : (
+            <ResourceView
+              context={selected}
+              resource={resource}
+              namespace={namespace}
+              onNamespace={setNamespace}
+              onOpenDock={openTab}
+              onForwardStarted={openForwards}
+              readOnly={cluster.readOnly}
+            />
+          )}
         </div>
       )}
 
