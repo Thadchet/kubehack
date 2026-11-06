@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"slices"
 	"strings"
 	"time"
@@ -136,4 +138,51 @@ func fetchVersion(ctx context.Context, config *rest.Config) Status {
 		return Status{Error: fmt.Sprintf("parse version: %v", err)}
 	}
 	return Status{Reachable: true, Version: version.GitVersion}
+}
+
+// WriteContainerKubeconfig saves a copy of the kubeconfig that works from inside
+// a container, because the original was written for the host:
+//
+//   - A server on 127.0.0.1, such as kind, moves to hostAddress. TLS still checks
+//     the original name, which is the one on the server's certificate.
+//   - Credential plugins are found on PATH, as a host path like
+//     /opt/homebrew/bin/gke-gcloud-auth-plugin doesn't exist in the container.
+func WriteContainerKubeconfig(path, hostAddress string) error {
+	config, err := clientcmd.NewDefaultClientConfigLoadingRules().Load()
+	if err != nil {
+		return fmt.Errorf("load kubeconfig: %w", err)
+	}
+
+	for name, entry := range config.Clusters {
+		server, err := url.Parse(entry.Server)
+		if err != nil {
+			return fmt.Errorf("parse server of cluster %s: %w", name, err)
+		}
+		if !isLoopback(server.Hostname()) {
+			continue
+		}
+		if entry.TLSServerName == "" {
+			entry.TLSServerName = server.Hostname()
+		}
+		server.Host = net.JoinHostPort(hostAddress, server.Port())
+		entry.Server = server.String()
+	}
+	for _, user := range config.AuthInfos {
+		if user.Exec != nil {
+			user.Exec.Command = user.Exec.Command[strings.LastIndexAny(user.Exec.Command, `/\`)+1:]
+		}
+	}
+
+	if err := clientcmd.WriteToFile(*config, path); err != nil {
+		return fmt.Errorf("write kubeconfig: %w", err)
+	}
+	return nil
+}
+
+func isLoopback(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }

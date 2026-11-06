@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 const pluginToken = "plugin-token"
@@ -210,5 +212,65 @@ printf '%[1]sPATH=/from/shell\0KUBEHACK_NEW=shell\0KUBEHACK_SET=shell\0PWD=/nope
 	}
 	if got := os.Getenv("PATH"); !strings.HasPrefix(got, "/from/shell:/usr/bin") {
 		t.Errorf("PATH = %q", got)
+	}
+}
+
+func TestWriteContainerKubeconfig(t *testing.T) {
+	source := filepath.Join(t.TempDir(), "config")
+	if err := os.WriteFile(source, []byte(`apiVersion: v1
+kind: Config
+clusters:
+- name: local
+  cluster: {server: "https://127.0.0.1:6443"}
+- name: named
+  cluster: {server: "https://localhost:6443", tls-server-name: custom.test}
+- name: remote
+  cluster: {server: "https://34.1.2.3"}
+users:
+- name: plugin
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      command: /opt/homebrew/bin/some-plugin
+      interactiveMode: Never
+- name: bare
+  user:
+    exec:
+      apiVersion: client.authentication.k8s.io/v1
+      command: other-plugin
+      interactiveMode: Never
+contexts:
+- name: one
+  context: {cluster: local, user: plugin}
+`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("KUBECONFIG", source)
+
+	target := filepath.Join(t.TempDir(), "container")
+	if err := WriteContainerKubeconfig(target, "host.test"); err != nil {
+		t.Fatal(err)
+	}
+	got, err := clientcmd.LoadFromFile(target)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	clusters := []struct{ name, server, tlsName string }{
+		{"local", "https://host.test:6443", "127.0.0.1"},
+		{"named", "https://host.test:6443", "custom.test"},
+		{"remote", "https://34.1.2.3", ""},
+	}
+	for _, want := range clusters {
+		entry := got.Clusters[want.name]
+		if entry.Server != want.server || entry.TLSServerName != want.tlsName {
+			t.Errorf("%s = %s, %q", want.name, entry.Server, entry.TLSServerName)
+		}
+	}
+	if command := got.AuthInfos["plugin"].Exec.Command; command != "some-plugin" {
+		t.Errorf("plugin command = %q", command)
+	}
+	if command := got.AuthInfos["bare"].Exec.Command; command != "other-plugin" {
+		t.Errorf("bare command = %q", command)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"net/http"
 	"strconv"
@@ -27,6 +28,15 @@ type Options struct {
 	Token          string
 	AllowedOrigins []string
 	Debug          bool
+	// Address is the interface to listen on. Empty means 127.0.0.1. Docker needs
+	// a wider one, because published ports arrive on the container's own network.
+	Address string
+	// UI is served to anyone who passes the Host and Origin checks, so it must
+	// hold no secrets. Nil serves API requests only.
+	UI fs.FS
+	// NoForwards refuses new port forwards, because a port opened inside a
+	// container can't be reached from the user's computer.
+	NoForwards bool
 	// NewClient overrides how clients are built, for tests.
 	NewClient resources.ClientFactory
 	// OpenLogs overrides how logs are read, for tests.
@@ -43,10 +53,13 @@ type Options struct {
 	Settings *settings.Store
 }
 
-// Server is an API server that only listens on the loopback interface.
+// Server is an API server that listens on the loopback interface, unless
+// Options.Address says otherwise.
 type Server struct {
 	token       string
 	origins     map[string]struct{}
+	ui          http.Handler
+	noForwards  bool
 	listener    net.Listener
 	http        *http.Server
 	hub         *resources.Hub
@@ -66,7 +79,7 @@ type Server struct {
 	cancel context.CancelFunc
 }
 
-// New binds the listener on 127.0.0.1 and prepares the server.
+// New binds the listener and prepares the server.
 func New(opts Options) (*Server, error) {
 	token := opts.Token
 	if token == "" {
@@ -77,7 +90,11 @@ func New(opts Options) (*Server, error) {
 		token = hex.EncodeToString(buf)
 	}
 
-	listener, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(opts.Port)))
+	address := opts.Address
+	if address == "" {
+		address = "127.0.0.1"
+	}
+	listener, err := net.Listen("tcp", net.JoinHostPort(address, strconv.Itoa(opts.Port)))
 	if err != nil {
 		return nil, fmt.Errorf("listen: %w", err)
 	}
@@ -124,10 +141,17 @@ func New(opts Options) (*Server, error) {
 		}
 	}
 
+	var ui http.Handler
+	if opts.UI != nil {
+		ui = http.FileServerFS(opts.UI)
+	}
+
 	baseCtx, cancel := context.WithCancel(context.Background())
 	s := &Server{
 		token:       token,
 		origins:     origins,
+		ui:          ui,
+		noForwards:  opts.NoForwards,
 		listener:    listener,
 		hub:         resources.NewHub(newClient),
 		openLogs:    openLogs,

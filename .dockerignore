@@ -1,0 +1,5 @@
+.git
+build
+releases
+**/node_modules
+frontend/dist

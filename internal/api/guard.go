@@ -40,6 +40,12 @@ func (s *Server) guard(next http.Handler) http.Handler {
 			return
 		}
 
+		// The page has to load before it can present the token.
+		if s.ui != nil && !strings.HasPrefix(r.URL.Path, "/api/") {
+			s.ui.ServeHTTP(w, r)
+			return
+		}
+
 		if !s.validToken(r) {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
