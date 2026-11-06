@@ -65,6 +65,13 @@ function Session({ target, container, active, onStatus }: SessionProps) {
     terminal.current = term;
     fit.current = fitAddon;
 
+    // The rest of the app follows the system through CSS, which xterm can't see.
+    const scheme = window.matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      term.options.theme = themeColors();
+    };
+    scheme.addEventListener("change", applyTheme);
+
     const encoder = new TextEncoder();
     const sendInput = (text: string) => {
       if (socket?.readyState === WebSocket.OPEN) {
@@ -126,6 +133,7 @@ function Session({ target, container, active, onStatus }: SessionProps) {
 
     return () => {
       stopped = true;
+      scheme.removeEventListener("change", applyTheme);
       socket?.close();
       term.dispose();
     };

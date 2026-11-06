@@ -641,6 +641,11 @@
   gap: 4px;
 }
 
+/* The band stays light in dark mode, where an empty dark box looks ticked. */
+.band-readonly input {
+  color-scheme: light;
+}
+
 .detail-actions {
   flex-wrap: wrap;
 }
@@ -726,6 +731,11 @@
 
 .terminal-host .xterm {
   height: 100%;
+}
+
+/* xterm paints this black, which shows where rows don't fill the height. */
+.terminal-host .xterm .xterm-viewport {
+  background-color: var(--ground);
 }
 
 .band-forwards {
