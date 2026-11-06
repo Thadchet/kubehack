@@ -44,6 +44,13 @@ func writeForwardError(w http.ResponseWriter, err error) {
 // startForward is blocked in read-only mode for the same reason as a shell: the
 // tunnel reaches whatever the pod serves, and that can change data.
 func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
+	if s.noForwards {
+		writeJSON(w, http.StatusConflict, applyFailure{
+			Kind:    "invalid",
+			Message: "Port forwards aren't available when Kubehack runs in Docker. Use the desktop app, or kubectl port-forward.",
+		})
+		return
+	}
 	if s.rejectReadOnly(w, r) {
 		return
 	}

@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 const testOrigin = "wails://wails"
@@ -155,5 +156,39 @@ contexts:
 	status, _ = get("/api/v1/contexts/nope/status")
 	if status != http.StatusNotFound {
 		t.Errorf("unknown context: %d", status)
+	}
+}
+
+func TestGuardServesUIWithoutToken(t *testing.T) {
+	s, err := New(Options{
+		Token: "secret",
+		UI:    fstest.MapFS{"index.html": {Data: []byte("page")}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = s.listener.Close() })
+	validHost := s.listener.Addr().String()
+
+	tests := []struct {
+		name string
+		host string
+		path string
+		want int
+	}{
+		{name: "page", host: validHost, path: "/", want: http.StatusOK},
+		{name: "api still needs the token", host: validHost, path: "/api/v1/health", want: http.StatusUnauthorized},
+		{name: "page still checks host", host: "evil.test", path: "/", want: http.StatusForbidden},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			request.Host = test.host
+			recorder := httptest.NewRecorder()
+			s.http.Handler.ServeHTTP(recorder, request)
+			if recorder.Code != test.want {
+				t.Errorf("status = %d, want %d", recorder.Code, test.want)
+			}
+		})
 	}
 }

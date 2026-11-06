@@ -134,6 +134,16 @@ func TestStartForwardReportsPortInUse(t *testing.T) {
 	}
 }
 
+func TestNoForwardsRefusesNewForwards(t *testing.T) {
+	driver := &stubForwards{}
+	server := startForwardServer(t, driver)
+	server.noForwards = true
+	response, body := postForward(t, server, startPath, forwardBody)
+	if response.StatusCode != http.StatusConflict || !strings.Contains(body, "Docker") {
+		t.Fatalf("status = %d: %s", response.StatusCode, body)
+	}
+}
+
 func TestReadOnlyBlocksForwards(t *testing.T) {
 	driver := &stubForwards{drop: make(chan struct{}, 1)}
 	server := startForwardServer(t, driver)

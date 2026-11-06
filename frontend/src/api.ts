@@ -5,16 +5,33 @@ export interface Connection {
   token: string;
 }
 
+const tokenKey = "kubehack.token";
+
 let connection: Promise<Connection> | undefined;
 
 function loadConnection(): Promise<Connection> {
   if ("go" in window) {
     return loadDesktopConnection();
   }
-  return Promise.resolve({
-    baseUrl: import.meta.env.VITE_KUBEHACK_API,
-    token: import.meta.env.VITE_KUBEHACK_TOKEN,
-  });
+  if (import.meta.env.VITE_KUBEHACK_API) {
+    return Promise.resolve({
+      baseUrl: import.meta.env.VITE_KUBEHACK_API,
+      token: import.meta.env.VITE_KUBEHACK_TOKEN,
+    });
+  }
+  return Promise.resolve({ baseUrl: location.origin, token: takeUrlToken() });
+}
+
+// The Docker version serves this page itself, and opens it with the token in the
+// URL fragment, which browsers never send to a server. It moves to session
+// storage so that it leaves the address bar but survives a reload.
+function takeUrlToken(): string {
+  const token = new URLSearchParams(location.hash.slice(1)).get("token");
+  if (token) {
+    sessionStorage.setItem(tokenKey, token);
+    history.replaceState(null, "", location.pathname);
+  }
+  return sessionStorage.getItem(tokenKey) ?? "";
 }
 
 // ApiError keeps the response body, which can say how to recover.

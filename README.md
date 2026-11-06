@@ -1,7 +1,7 @@
 # Kubehack
 
-A desktop app for looking after your Kubernetes clusters, on Mac and Windows. See what's
-running, read logs, open a shell in a container, and manage Helm releases from
+A desktop app for looking after your Kubernetes clusters, on Mac and Windows, that
+can also run in Docker and open in your browser. See what's running, read logs, open a shell in a container, and manage Helm releases from
 one window, without typing `kubectl` commands.
 
 Kubehack uses the same access you already have with `kubectl`. There's nothing
@@ -55,6 +55,47 @@ Kubehack needs Microsoft Edge WebView2, which Windows 11 already includes. If it
 missing, Kubehack offers to install it.
 
 To update on either system, quit Kubehack and repeat these steps.
+
+### Docker
+
+Use this if you'd rather not install the app. Kubehack opens in your browser
+instead of its own window. You need [Docker](https://www.docker.com/products/docker-desktop/)
+running, `git`, and a Mac or Linux terminal. This has only been tested on a Mac
+with Docker Desktop.
+
+```sh
+git clone https://github.com/Thadchet/kubehack.git
+cd kubehack
+./run.sh docker
+```
+
+The first run takes a few minutes, because it builds the image. Your browser then
+opens Kubehack. Press Ctrl+C in the terminal to stop it. To update, run `git pull`
+and start it again.
+
+Set `KUBECONFIG` first to limit it to certain clusters, and `KUBEHACK_PORT` if
+port 8765 is taken.
+
+Kubehack gets a read-only copy of your kubeconfig, and uses the same **Read-only**
+choices as the desktop app. If your kubeconfig has a GKE cluster, it also gets your
+`~/.config/gcloud` sign-in, with write access because `gcloud` needs it, and the
+image grows from about 100 MB to about 1.3 GB to hold `gcloud`.
+
+Some things work differently in Docker:
+
+- **Port forwards aren't available**, because a port opened inside the container
+  can't be reached from your computer. Use `kubectl port-forward` or the desktop app.
+- **GKE is the only sign-in tool included.** Clusters that need another one, such as
+  `aws` for EKS or `kubelogin` for AKS, show "Could not reach".
+- **Certificates must be inside your kubeconfig.** A kubeconfig that points to
+  separate certificate files, as minikube's does, doesn't work.
+- **Clusters on your own computer**, such as kind, work with Docker Desktop only.
+- **New clusters need a restart.** Kubehack reads your kubeconfig when it starts.
+- **Helm repositories from `helm repo add` aren't available.** Use an `oci://` chart.
+
+The link Kubehack opens holds a secret token, also shown in the terminal. Anyone
+with it can use your cluster access, so don't share it. Only your own computer can
+reach the port. To open Kubehack in another tab, copy the link from the terminal.
 
 ## Your first five minutes
 
@@ -142,10 +183,12 @@ the install steps again.
 
 ## Remove Kubehack
 
-Delete the app, then delete its saved settings:
+Delete the app, or for Docker, run `docker rmi kubehack kubehack:gke`. Then delete
+its saved settings:
 
 - **Mac:** `~/Library/Application Support/kubehack`
 - **Windows:** `%AppData%\kubehack`
+- **Linux, with Docker:** `~/.config/kubehack`
 
 Kubehack doesn't install anything in your clusters. Helm releases you installed
 stay there until you uninstall them.
@@ -180,8 +223,15 @@ built app's origin. Read-only choices aren't saved in this mode.
 ./run.sh dev
 ```
 
-Set `KUBEHACK_DEBUG=1` to log API requests. Set `KUBECONFIG` before either
-`run.sh` command to limit a run to certain clusters.
+**Run in Docker.** This builds the image and starts it. The UI and the API share
+one port. The image needs Docker only, not Go or Node.
+
+```sh
+./run.sh docker
+```
+
+Set `KUBEHACK_DEBUG=1` to log API requests. Set `KUBECONFIG` before any of these
+`run.sh` commands to limit a run to certain clusters.
 
 **Test.**
 
@@ -205,6 +255,7 @@ go test -tags integration ./internal/api
 ```text
 main.go, app.go    Desktop app and its lifecycle
 cmd/kubehack-dev   The API without the desktop app
+cmd/kubehack-docker  The API and the UI for the Docker image
 internal/api       Local HTTP and WebSocket API
 internal/cluster   Kubeconfig and shell environment
 internal/resources Discovery, watching, apply and actions
@@ -216,4 +267,6 @@ frontend/src       React UI
 ```
 
 The API listens on `127.0.0.1` with a random port and token for each launch, and
-checks `Host` and `Origin`, because any web page can reach a loopback port.
+checks `Host` and `Origin`, because any web page can reach a loopback port. In
+Docker the port and token are set by `run.sh`, and the API listens on all of the
+container's interfaces, but the port is only published on the host's `127.0.0.1`.
