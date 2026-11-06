@@ -59,27 +59,43 @@ To update on either system, quit Kubehack and repeat these steps.
 ### Docker
 
 Use this if you'd rather not install the app. Kubehack opens in your browser
-instead of its own window. You need [Docker](https://www.docker.com/products/docker-desktop/)
-running, `git`, and a Mac or Linux terminal. This has only been tested on a Mac
-with Docker Desktop.
+instead of its own window. You only need
+[Docker](https://www.docker.com/products/docker-desktop/) running. This has only
+been tested on a Mac with Docker Desktop.
 
 ```sh
-git clone https://github.com/Thadchet/kubehack.git
-cd kubehack
-./run.sh docker
+docker run --rm -p 127.0.0.1:8765:8765 \
+  -v ~/.kube/config:/kube/config:ro \
+  -v kubehack:/settings \
+  ghcr.io/thadchet/kubehack
 ```
 
-The first run takes a few minutes, because it builds the image. Your browser then
-opens Kubehack. Press Ctrl+C in the terminal to stop it. To update, run `git pull`
-and start it again.
+If your kubeconfig has a GKE cluster, use the `gke` image, which is about 1.3 GB
+instead of 100 MB because it holds `gcloud`. It also needs your sign-in, with write
+access because `gcloud` requires it.
 
-Set `KUBECONFIG` first to limit it to certain clusters, and `KUBEHACK_PORT` if
-port 8765 is taken.
+```sh
+docker run --rm -p 127.0.0.1:8765:8765 \
+  -v ~/.kube/config:/kube/config:ro \
+  -v ~/.config/gcloud:/gcloud \
+  -v kubehack:/settings \
+  ghcr.io/thadchet/kubehack:gke
+```
 
-Kubehack gets a read-only copy of your kubeconfig, and uses the same **Read-only**
-choices as the desktop app. If your kubeconfig has a GKE cluster, it also gets your
-`~/.config/gcloud` sign-in, with write access because `gcloud` needs it, and the
-image grows from about 100 MB to about 1.3 GB to hold `gcloud`.
+Open the link the terminal shows. Press Ctrl+C to stop Kubehack. To update, run
+`docker pull` with the same image name.
+
+Keep `127.0.0.1` in the `-p` option. The link holds a secret token, and anyone with
+it can use your cluster access, so don't share it or open the port to your network.
+
+To use another port, change all three numbers, for example
+`-p 127.0.0.1:9000:9000` with `-port 9000` after the image name.
+
+**Read-only** choices are kept in the `kubehack` volume, separately from the desktop
+app, so turn them on here too.
+
+On Linux, the container's user can't read your kubeconfig. Clone this repository
+and use `./run.sh docker` instead, which builds the image and runs it as you.
 
 Some things work differently in Docker:
 
@@ -93,9 +109,7 @@ Some things work differently in Docker:
 - **New clusters need a restart.** Kubehack reads your kubeconfig when it starts.
 - **Helm repositories from `helm repo add` aren't available.** Use an `oci://` chart.
 
-The link Kubehack opens holds a secret token, also shown in the terminal. Anyone
-with it can use your cluster access, so don't share it. Only your own computer can
-reach the port. To open Kubehack in another tab, copy the link from the terminal.
+To open Kubehack in another tab, copy the link from the terminal again.
 
 ## Your first five minutes
 
@@ -183,12 +197,12 @@ the install steps again.
 
 ## Remove Kubehack
 
-Delete the app, or for Docker, run `docker rmi kubehack kubehack:gke`. Then delete
-its saved settings:
+Delete the app, then delete its saved settings. For Docker, run
+`docker rmi ghcr.io/thadchet/kubehack ghcr.io/thadchet/kubehack:gke` and
+`docker volume rm kubehack` instead.
 
 - **Mac:** `~/Library/Application Support/kubehack`
 - **Windows:** `%AppData%\kubehack`
-- **Linux, with Docker:** `~/.config/kubehack`
 
 Kubehack doesn't install anything in your clusters. Helm releases you installed
 stay there until you uninstall them.
@@ -223,8 +237,10 @@ built app's origin. Read-only choices aren't saved in this mode.
 ./run.sh dev
 ```
 
-**Run in Docker.** This builds the image and starts it. The UI and the API share
-one port. The image needs Docker only, not Go or Node.
+**Run in Docker from source.** This builds the image and starts it, and opens your
+browser. The UI and the API share one port. It needs Docker, not Go or Node, and
+shares its **Read-only** choices with the desktop app. Set `KUBEHACK_PORT` if port
+8765 is taken. Pushing to `main` publishes both images to `ghcr.io`.
 
 ```sh
 ./run.sh docker
@@ -268,5 +284,5 @@ frontend/src       React UI
 
 The API listens on `127.0.0.1` with a random port and token for each launch, and
 checks `Host` and `Origin`, because any web page can reach a loopback port. In
-Docker the port and token are set by `run.sh`, and the API listens on all of the
-container's interfaces, but the port is only published on the host's `127.0.0.1`.
+Docker the API listens on all of the container's interfaces, so the port must only
+be published on the host's `127.0.0.1`.
