@@ -1,6 +1,6 @@
 # Kubehack
 
-A desktop app for looking after your Kubernetes clusters on a Mac. See what's
+A desktop app for looking after your Kubernetes clusters, on Mac and Windows. See what's
 running, read logs, open a shell in a container, and manage Helm releases from
 one window, without typing `kubectl` commands.
 
@@ -21,46 +21,39 @@ own clusters and any chart source you choose.
 
 ## Before you start
 
-You need a Mac and access to a Kubernetes cluster. If `kubectl get pods` works
-in your terminal, Kubehack will work too. It has been tested on macOS 26 with
-Apple silicon.
-
-There's no download yet, so you build the app on your Mac once. This takes a few
-minutes the first time.
+You need access to a Kubernetes cluster. If `kubectl get pods` works in your
+terminal, Kubehack will work too, because it uses the same kubeconfig and sign-in
+tools.
 
 ## Install
 
-**1. Install the tools.** Open Terminal and run these. The second line needs
-[Homebrew](https://brew.sh).
+### Mac
 
-```sh
-xcode-select --install
-brew install go node
-```
+1. Download [kubehack-macos.zip](https://github.com/Thadchet/kubehack/raw/main/releases/kubehack-macos.zip).
+   It works on Apple silicon and Intel.
+2. Open the zip, and drag `kubehack.app` to your Applications folder.
+3. The app isn't signed by Apple, so macOS blocks it at first. Open Terminal and
+   run this once:
 
-If the first command says the tools are already installed, carry on.
+   ```sh
+   xattr -dr com.apple.quarantine /Applications/kubehack.app
+   ```
 
-**2. Download Kubehack and start it.**
+4. Open Kubehack from Applications.
 
-```sh
-git clone https://github.com/Thadchet/kubehack.git
-cd kubehack
-./run.sh
-```
+### Windows
 
-The app opens when the build finishes. To open it again later, go back to the
-`kubehack` folder and run `./run.sh`, or open `build/bin/kubehack.app` from
-Finder. You can also drag that file to your Applications folder.
+The Windows version is new, and hasn't been tested on a real Windows PC yet.
 
-To update to the latest version:
+1. Download [kubehack-windows-x64.zip](https://github.com/Thadchet/kubehack/raw/main/releases/kubehack-windows-x64.zip).
+2. Extract the zip, and open `kubehack.exe`.
+3. The app isn't signed, so Windows may show a SmartScreen warning. Select **More
+   info**, then **Run anyway**.
 
-```sh
-git pull
-./run.sh
-```
+Kubehack needs Microsoft Edge WebView2, which Windows 11 already includes. If it's
+missing, Kubehack offers to install it.
 
-Quit Kubehack first, or `./run.sh` will bring back the old version that's still
-open.
+To update on either system, quit Kubehack and repeat these steps.
 
 ## Your first five minutes
 
@@ -108,6 +101,7 @@ upgrade it, roll it back to an earlier revision, or uninstall it.
 
 ## Good to know
 
+- On Windows, Ctrl+C in a terminal stops the running command rather than copying.
 - Closing a terminal tab ends everything running in that shell, like closing a
   terminal window. Use `nohup` for anything that needs to carry on.
 - Port forwards stop when you quit Kubehack. If one drops, a message at the top
@@ -121,11 +115,11 @@ upgrade it, roll it back to an earlier revision, or uninstall it.
 ## If something goes wrong
 
 **"No clusters found in kubeconfig."** Kubehack can't find a cluster. Run
-`kubectl config get-contexts` in Terminal. If that's empty too, add your cluster
+`kubectl config get-contexts` in a terminal. If that's empty too, add your cluster
 with your provider's tool, for example `gcloud container clusters get-credentials`
 or `aws eks update-kubeconfig`, then reopen Kubehack.
 
-**"Could not reach" a cluster.** Check that `kubectl get pods` works in Terminal,
+**"Could not reach" a cluster.** Check that `kubectl get pods` works in a terminal,
 and that any VPN you need is connected. Your sign-in may have expired, so sign in
 again with your provider's tool. Then select **Try again**.
 
@@ -139,26 +133,40 @@ minimal images.
 **A port is already in use.** Leave **Local port** empty, and Kubehack picks a
 free one.
 
-**`./run.sh` says `go` or `npm` is missing.** Finish the first install step, then
-open a new Terminal window.
-
-**macOS won't open a copy from another Mac.** The app isn't signed, so each Mac
-needs to build its own.
+**macOS says the app is damaged or can't be opened.** Run the `xattr` command from
+the install steps again.
 
 ## Remove Kubehack
 
-Delete the `kubehack` folder, any copy in Applications, and the saved settings:
+Delete the app, then delete its saved settings:
 
-```sh
-rm -rf ~/Library/Application\ Support/kubehack
-```
+- **Mac:** `~/Library/Application Support/kubehack`
+- **Windows:** `%AppData%\kubehack`
 
 Kubehack doesn't install anything in your clusters. Helm releases you installed
 stay there until you uninstall them.
 
 ## For developers
 
-Kubehack uses Wails, Go and React.
+Kubehack uses Wails, Go and React. Building needs a Mac with Go 1.26, Node 20.19
+and Xcode Command Line Tools (`brew install go node`, `xcode-select --install`).
+
+**Build and open the app.** This installs the Wails CLI if needed, and only
+rebuilds if the code changed. If Go downloads fail on an unreliable connection,
+run it again, or set `GOPROXY=https://goproxy.cn,direct` or `GOPROXY=direct`.
+
+```sh
+git clone https://github.com/Thadchet/kubehack.git
+cd kubehack
+./run.sh
+```
+
+**Make the downloads.** This builds both zips into `releases/` on a Mac, then
+commit them.
+
+```sh
+./run.sh release
+```
 
 **Run with hot reload.** This starts the API and the UI in your browser. Press
 Ctrl+C to stop both. `wails dev` doesn't work, because the API only accepts the

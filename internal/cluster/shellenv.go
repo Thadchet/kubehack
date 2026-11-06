@@ -7,8 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
-	"syscall"
 	"time"
 )
 
@@ -33,6 +33,11 @@ var shellOnlyVars = map[string]struct{}{
 // already set win, except PATH, which is merged. Values are never logged
 // because they can hold secrets.
 func ImportShellEnv(ctx context.Context) error {
+	// Windows gives desktop apps the user's full environment already.
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	shell := os.Getenv("SHELL")
 	if shell == "" {
 		shell = defaultShell
@@ -77,9 +82,7 @@ func readShellEnv(ctx context.Context, shell string) ([]byte, error) {
 	// The markers separate the result from anything the profile prints.
 	script := fmt.Sprintf("printf %[1]s; /usr/bin/env -0; printf %[1]s", shellEnvMarker)
 	cmd := exec.CommandContext(ctx, shell, "-ilc", script)
-	// A new session keeps an interactive shell from taking over the terminal
-	// when the app is started from one.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+	detachSession(cmd)
 	// Background jobs from the profile can hold stdout open after a timeout.
 	cmd.WaitDelay = time.Second
 

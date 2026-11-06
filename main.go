@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -17,10 +18,13 @@ func main() {
 	app := NewApp()
 
 	// macOS routes Cmd+C and Cmd+V through the Edit menu, so without one copy and
-	// paste do nothing in the editor or the terminal.
-	appMenu := menu.NewMenu()
-	appMenu.Append(menu.AppMenu())
-	appMenu.Append(menu.EditMenu())
+	// paste do nothing in the editor or the terminal. Windows needs no menu.
+	var appMenu *menu.Menu
+	if runtime.GOOS == "darwin" {
+		appMenu = menu.NewMenu()
+		appMenu.Append(menu.AppMenu())
+		appMenu.Append(menu.EditMenu())
+	}
 
 	// Create application with options
 	err := wails.Run(&options.App{

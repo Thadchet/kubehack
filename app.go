@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"runtime"
 	"time"
 
 	"kubehack/internal/api"
@@ -11,8 +12,14 @@ import (
 	"kubehack/internal/settings"
 )
 
-// appOrigins holds the Origin sent by the macOS webview in a built app.
-var appOrigins = []string{"wails://wails"}
+// appOrigins returns the Origin sent by the webview of a built app. Each platform
+// allows only its own, so that macOS doesn't accept an http origin it never uses.
+func appOrigins(goos string) []string {
+	if goos == "windows" {
+		return []string{"http://wails.localhost"}
+	}
+	return []string{"wails://wails"}
+}
 
 // Connection tells the UI how to reach the local API.
 type Connection struct {
@@ -50,7 +57,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 
 	server, err := api.New(api.Options{
-		AllowedOrigins: appOrigins,
+		AllowedOrigins: appOrigins(runtime.GOOS),
 		Debug:          os.Getenv("KUBEHACK_DEBUG") != "",
 		Settings:       store,
 	})

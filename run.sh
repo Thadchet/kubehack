@@ -2,6 +2,7 @@
 #
 # ./run.sh        Build the app if the code changed, then open it.
 # ./run.sh dev    Run the API and the UI with hot reload, in a browser.
+# ./run.sh release  Build the macOS and Windows downloads into releases/.
 #
 # To limit a run to certain clusters, set KUBECONFIG first.
 set -euo pipefail
@@ -33,11 +34,10 @@ code_changed() {
     -type f -newer "$binary" -print -quit)" ]
 }
 
-run_app() {
+find_wails() {
   need go "Install it from https://go.dev/dl/"
   need npm "Install Node from https://nodejs.org/"
 
-  local wails
   wails=$(command -v wails || true)
   if [ -z "$wails" ]; then
     wails=$(go env GOPATH)/bin/wails
@@ -46,7 +46,10 @@ run_app() {
       go install "github.com/wailsapp/wails/v2/cmd/wails@$wails_version"
     fi
   fi
+}
 
+run_app() {
+  find_wails
   if code_changed; then
     echo "Building the app"
     "$wails" build
@@ -91,8 +94,26 @@ run_dev() {
     npx vite --port "$ui_port" --strictPort
 }
 
+run_release() {
+  find_wails
+  mkdir -p releases
+
+  # One build covers both Apple silicon and Intel Macs.
+  "$wails" build -clean -platform darwin/universal
+  rm -f releases/kubehack-macos.zip
+  # ditto keeps the bundle's signature, which zip can break.
+  ditto -c -k --keepParent "$app" releases/kubehack-macos.zip
+
+  "$wails" build -platform windows/amd64
+  rm -f releases/kubehack-windows-x64.zip
+  (cd build/bin && zip -q ../../releases/kubehack-windows-x64.zip kubehack.exe)
+
+  ls -lh releases
+}
+
 case "${1:-}" in
   "") run_app ;;
   dev) run_dev ;;
-  *) fail "Usage: ./run.sh [dev]" ;;
+  release) run_release ;;
+  *) fail "Usage: ./run.sh [dev|release]" ;;
 esac
