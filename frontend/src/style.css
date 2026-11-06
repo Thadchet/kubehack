@@ -1,34 +1,45 @@
 @import "@fontsource/atkinson-hyperlegible-next/400.css";
+@import "@fontsource/atkinson-hyperlegible-next/500.css";
 @import "@fontsource/atkinson-hyperlegible-next/600.css";
 @import "@fontsource/atkinson-hyperlegible-mono/400.css";
 
+/* Surfaces carry a trace of the open cluster's hue, set on this element by App. */
 :root {
-  --ground: #10272e;
-  --panel: #163239;
-  --raised: #1e3f47;
-  --line: #2a4a52;
-  --ink: #e4eeec;
-  --muted: #8fa9a8;
-  --good: #7fd6a4;
-  --warn: #eec261;
-  --bad: #f58e83;
-  --focus: #9fd8e6;
-  --band-ink: #10272e;
+  --hue: 240;
+
+  --chrome: oklch(0.155 0.012 var(--hue));
+  --ground: oklch(0.19 0.013 var(--hue));
+  --panel: oklch(0.22 0.015 var(--hue));
+  --raised: oklch(0.27 0.018 var(--hue));
+  --line: oklch(0.3 0.016 var(--hue));
+  --ink: oklch(0.95 0.008 var(--hue));
+  --muted: oklch(0.72 0.022 var(--hue));
+  --good: oklch(0.8 0.14 155);
+  --warn: oklch(0.83 0.13 85);
+  --bad: oklch(0.75 0.15 25);
+  --focus: oklch(0.8 0.11 var(--hue));
+  --accent: oklch(0.8 0.11 var(--hue));
+  --accent-soft: color-mix(in oklch, var(--accent) 16%, transparent);
+  --band-ink: oklch(0.2 0.03 var(--hue));
+  --shadow: 0 16px 48px oklch(0 0 0 / 0.45);
   color-scheme: dark;
 }
 
 @media (prefers-color-scheme: light) {
   :root {
-    --ground: #eef2f0;
-    --panel: #e2e9e6;
-    --raised: #d3dedb;
-    --line: #bccac6;
-    --ink: #12282e;
-    --muted: #4c6668;
-    --good: #14713f;
-    --warn: #8a5a00;
-    --bad: #b3261e;
-    --focus: #0b6a80;
+    --chrome: oklch(0.94 0.014 var(--hue));
+    --ground: oklch(0.995 0.002 var(--hue));
+    --panel: oklch(0.972 0.006 var(--hue));
+    --raised: oklch(0.935 0.012 var(--hue));
+    --line: oklch(0.9 0.012 var(--hue));
+    --ink: oklch(0.25 0.02 var(--hue));
+    --muted: oklch(0.48 0.025 var(--hue));
+    --good: oklch(0.5 0.13 155);
+    --warn: oklch(0.52 0.11 75);
+    --bad: oklch(0.53 0.19 27);
+    --focus: oklch(0.5 0.13 var(--hue));
+    --accent-soft: color-mix(in oklch, var(--accent) 26%, transparent);
+    --shadow: 0 16px 48px oklch(0.3 0.03 var(--hue) / 0.22);
     color-scheme: light;
   }
 }
@@ -45,12 +56,13 @@ body,
 }
 
 body {
-  background: var(--ground);
+  background: var(--chrome);
   color: var(--ink);
   font-family: "Atkinson Hyperlegible Next", -apple-system, sans-serif;
   font-size: 13px;
   line-height: 1.4;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -62,5 +74,34 @@ select {
 
 :focus-visible {
   outline: 2px solid var(--focus);
-  outline-offset: -2px;
+  outline-offset: 1px;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 8px;
+  background: var(--line);
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: var(--muted);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
+  }
 }

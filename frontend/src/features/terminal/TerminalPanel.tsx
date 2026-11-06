@@ -71,6 +71,9 @@ function Session({ target, container, active, onStatus }: SessionProps) {
       term.options.theme = themeColors();
     };
     scheme.addEventListener("change", applyTheme);
+    // Switching cluster changes the hue on the root element.
+    const hue = new MutationObserver(applyTheme);
+    hue.observe(document.documentElement, { attributes: true, attributeFilter: ["style"] });
 
     const encoder = new TextEncoder();
     const sendInput = (text: string) => {
@@ -134,6 +137,7 @@ function Session({ target, container, active, onStatus }: SessionProps) {
     return () => {
       stopped = true;
       scheme.removeEventListener("change", applyTheme);
+      hue.disconnect();
       socket?.close();
       term.dispose();
     };

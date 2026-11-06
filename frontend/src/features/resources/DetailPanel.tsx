@@ -1,9 +1,20 @@
+import {
+  Cable,
+  Maximize2,
+  Pencil,
+  RotateCcw,
+  ScrollText,
+  SquareTerminal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { useMemo, useState } from "react";
 import { stringify } from "yaml";
 import type { ActionType } from "../actions/ActionDialog";
 import type { APIResource } from "../cluster/useCluster";
+import { dataKind } from "../editor/dataValues";
 import { formatAge, formatCpu, formatMemory } from "./columns";
-import { SecretValues } from "./SecretValues";
+import { DataSection } from "./DataSection";
 import type { ObjectUsage } from "./useMetrics";
 import { useResourceWatch, type KubeObject, type ResourceRef } from "./useResourceWatch";
 
@@ -20,7 +31,7 @@ interface Props {
   onOpenLogs?: () => void;
   onOpenShell?: () => void;
   onForward?: () => void;
-  onEdit?: () => void;
+  onEdit?: (revealed?: boolean) => void;
   // Missing while the context is read-only.
   onAction?: (type: ActionType) => void;
 }
@@ -56,18 +67,19 @@ interface OverviewProps {
   resource: APIResource;
   object: KubeObject;
   usage?: ObjectUsage;
+  onEdit?: (revealed: boolean) => void;
 }
 
 function usageText(usage: { cpu: number; memory: number }): string {
   return `CPU ${formatCpu(usage.cpu)}, memory ${formatMemory(usage.memory)}`;
 }
 
-function Overview({ context, resource, object, usage }: OverviewProps) {
+function Overview({ context, resource, object, usage, onEdit }: OverviewProps) {
   const { metadata } = object;
   const status = object.status as Fields | undefined;
   const conditions = fields(status?.conditions);
   const containers = fields(status?.containerStatuses);
-  const isSecret = resource.group === "" && resource.resource === "secrets";
+  const kind = dataKind(resource);
 
   return (
     <>
@@ -100,7 +112,15 @@ function Overview({ context, resource, object, usage }: OverviewProps) {
         </dl>
       </section>
 
-      {isSecret && <SecretValues context={context} resource={resource} object={object} />}
+      {kind && (
+        <DataSection
+          kind={kind}
+          context={context}
+          resource={resource}
+          object={object}
+          onEdit={onEdit}
+        />
+      )}
 
       {containers.length > 0 && (
         <section className="detail-section">
@@ -227,31 +247,37 @@ export function DetailPanel({
           <div className="detail-actions">
             {onOpenLogs && (
               <button type="button" className="action" onClick={onOpenLogs}>
-                View logs (l)
+                <ScrollText size={14} aria-hidden="true" />
+                Logs <kbd>l</kbd>
               </button>
             )}
             {onOpenShell && (
               <button type="button" className="action" onClick={onOpenShell}>
-                Open shell (s)
+                <SquareTerminal size={14} aria-hidden="true" />
+                Shell <kbd>s</kbd>
               </button>
             )}
             {onForward && (
               <button type="button" className="action" onClick={onForward}>
-                Forward port (f)
+                <Cable size={14} aria-hidden="true" />
+                Forward <kbd>f</kbd>
               </button>
             )}
             {onEdit && (
-              <button type="button" className="action" onClick={onEdit}>
-                Edit (e)
+              <button type="button" className="action" onClick={() => onEdit()}>
+                <Pencil size={14} aria-hidden="true" />
+                Edit <kbd>e</kbd>
               </button>
             )}
             {onAction && resource.scalable && (
               <button type="button" className="action" onClick={() => onAction("scale")}>
+                <Maximize2 size={14} aria-hidden="true" />
                 Scale
               </button>
             )}
             {onAction && resource.restartable && (
               <button type="button" className="action" onClick={() => onAction("restart")}>
+                <RotateCcw size={14} aria-hidden="true" />
                 Restart
               </button>
             )}
@@ -262,13 +288,14 @@ export function DetailPanel({
                 data-tone="bad"
                 onClick={() => onAction("delete")}
               >
+                <Trash2 size={14} aria-hidden="true" />
                 Delete
               </button>
             )}
           </div>
         </div>
         <button type="button" className="quiet" onClick={onClose} aria-label="Close details">
-          ✕
+          <X size={16} aria-hidden="true" />
         </button>
       </header>
       <div className="tabs" role="tablist">
@@ -286,7 +313,13 @@ export function DetailPanel({
       </div>
       <div className="detail-body">
         {tab === "overview" && (
-          <Overview context={context} resource={resource} object={object} usage={usage} />
+          <Overview
+            context={context}
+            resource={resource}
+            object={object}
+            usage={usage}
+            onEdit={onEdit}
+          />
         )}
         {tab === "yaml" && (
           <>

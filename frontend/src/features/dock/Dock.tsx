@@ -1,3 +1,4 @@
+import { Cable, ScrollText, SquareTerminal, X } from "lucide-react";
 import { contextColor } from "../cluster/contextColor";
 import { LogPanel } from "../logs/LogPanel";
 import { ForwardPanel } from "../portforward/ForwardPanel";
@@ -47,6 +48,7 @@ export function Dock({
               aria-selected={activeId === forwardsTab}
               onClick={() => onActivate(forwardsTab)}
             >
+              <Cable size={14} aria-hidden="true" />
               Port forwards
             </button>
             <button
@@ -55,7 +57,7 @@ export function Dock({
               aria-label="Close port forwards"
               onClick={() => onClose(forwardsTab)}
             >
-              ✕
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         )}
@@ -73,7 +75,14 @@ export function Dock({
                 aria-hidden="true"
                 style={{ backgroundColor: contextColor(tab.context) }}
               />
-              {tab.kind === "terminal" ? `Shell: ${tab.pod}` : tab.pod}
+              {tab.kind === "terminal" ? (
+                <SquareTerminal size={14} aria-hidden="true" />
+              ) : (
+                <ScrollText size={14} aria-hidden="true" />
+              )}
+              <span className="dock-label">
+                {tab.kind === "terminal" ? `Shell: ${tab.pod}` : tab.pod}
+              </span>
             </button>
             <button
               type="button"
@@ -81,7 +90,7 @@ export function Dock({
               aria-label={`Close ${tab.kind === "terminal" ? "shell" : "logs"} for ${tab.pod}`}
               onClick={() => onClose(tab.id)}
             >
-              ✕
+              <X size={14} aria-hidden="true" />
             </button>
           </div>
         ))}

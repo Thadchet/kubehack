@@ -1,3 +1,4 @@
+import { json } from "@codemirror/lang-json";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { yaml } from "@codemirror/lang-yaml";
 import { unifiedMergeView } from "@codemirror/merge";
@@ -36,9 +37,10 @@ interface Props {
   onChange?: (value: string) => void;
   // Shows value as a diff against this text.
   original?: string;
+  language?: "yaml" | "json";
 }
 
-export function CodeView({ value, onChange, original }: Props) {
+export function CodeView({ value, onChange, original, language = "yaml" }: Props) {
   const host = useRef<HTMLDivElement>(null);
   const changeHandler = useRef(onChange);
   changeHandler.current = onChange;
@@ -53,7 +55,8 @@ export function CodeView({ value, onChange, original }: Props) {
         doc: value,
         extensions: [
           basicSetup,
-          yaml(),
+          // Long values are the norm in JSON, where text can't span lines.
+          ...(language === "json" ? [json(), EditorView.lineWrapping] : [yaml()]),
           theme,
           highlighting,
           EditorState.readOnly.of(!editable),

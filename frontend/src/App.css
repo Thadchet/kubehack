@@ -1,85 +1,403 @@
+/* The sidebar runs the full height, with the dock under the view beside it. The
+   dock can't move in the tree, because remounting it would end its shells. */
 .shell {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
   height: 100%;
 }
 
-/* The band is the one loud element: it names the cluster in its own color. */
+.band,
+.notices {
+  grid-column: 1 / -1;
+}
+
+/* Shared parts. */
+
+.action,
+.message button,
+.edit-actions button,
+.log-toolbar button,
+.log-toolbar select {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--ground);
+  cursor: pointer;
+  transition:
+    background-color 120ms,
+    border-color 120ms;
+}
+
+.action:hover,
+.message button:hover,
+.edit-actions button:hover:not(:disabled),
+.log-toolbar button:hover {
+  border-color: var(--muted);
+  background: var(--raised);
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 4px 10px;
+  font-weight: 500;
+}
+
+.action[data-tone="bad"]:hover {
+  border-color: var(--bad);
+  background: color-mix(in oklch, var(--bad) 12%, transparent);
+}
+
+.action svg {
+  flex: none;
+  color: var(--muted);
+}
+
+.action[data-tone="bad"] svg {
+  color: inherit;
+}
+
+kbd {
+  padding: 0 5px;
+  border-radius: 4px;
+  background: var(--raised);
+  color: var(--muted);
+  font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  font-size: 11px;
+}
+
+.filter,
+.namespace,
+.sidebar-search,
+.log-search input,
+.confirm-field input,
+.helm-fields input:not([type="checkbox"]) {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background-color: var(--ground);
+  transition: border-color 120ms;
+}
+
+.filter:hover,
+.namespace:hover,
+.sidebar-search:hover,
+.log-search input:hover,
+.confirm-field input:hover,
+.helm-fields input:not([type="checkbox"]):hover {
+  border-color: var(--muted);
+}
+
+/* A mid gray, because a data URL can't read the theme. */
+.filter,
+.sidebar-search {
+  padding: 5px 8px 5px 28px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23889' stroke-width='2' stroke-linecap='round' viewBox='0 0 24 24'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E");
+  background-position: 9px center;
+  background-repeat: no-repeat;
+}
+
+.namespace,
+.log-toolbar select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' fill='none' stroke='%23889' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 7px center;
+  background-repeat: no-repeat;
+}
+
+option {
+  background: var(--panel);
+  color: var(--ink);
+}
+
+.tabs,
+.edit-modes {
+  display: flex;
+  flex: none;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 9px;
+  background: var(--raised);
+}
+
+.tabs {
+  margin: 4px 16px 0;
+}
+
+.edit-modes {
+  align-self: center;
+  margin-right: auto;
+}
+
+.tabs button,
+.edit-modes button {
+  flex: 1;
+  padding: 3px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--muted);
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    background-color 120ms,
+    color 120ms;
+}
+
+.tabs button:hover,
+.edit-modes button:hover {
+  color: var(--ink);
+}
+
+.tabs button[aria-selected="true"],
+.edit-modes button[aria-selected="true"] {
+  background: var(--ground);
+  color: var(--ink);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.18);
+}
+
+[data-tone="good"] {
+  color: var(--good);
+}
+
+[data-tone="warn"] {
+  color: var(--warn);
+}
+
+[data-tone="bad"] {
+  color: var(--bad);
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.wrap {
+  overflow-wrap: anywhere;
+}
+
+.message {
+  margin: 0;
+  padding: 28px 20px;
+  max-width: 72ch;
+}
+
+.message p {
+  margin: 0 0 8px;
+}
+
+.message button {
+  padding: 5px 12px;
+  font-weight: 500;
+}
+
+.banner {
+  flex: none;
+  margin: 0;
+  padding: 7px 20px;
+  background: color-mix(in oklch, var(--bad) 12%, transparent);
+  color: var(--bad);
+  overflow-wrap: anywhere;
+}
+
+/* Top bar. The cluster chip is the one loud element: it names the cluster in
+   its own color, which the rest of the interface echoes quietly. */
+
 .band {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex: none;
-  padding: 6px 16px;
+  min-height: 48px;
+  padding: 8px 12px;
+}
+
+.band-cluster {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 60%;
+  border-radius: 8px;
   background: var(--raised);
   color: var(--band-ink);
 }
 
+.band-cluster svg {
+  position: absolute;
+  right: 9px;
+  pointer-events: none;
+}
+
 .band-context {
+  appearance: none;
   min-width: 0;
-  max-width: 70%;
-  padding: 2px 4px;
+  max-width: 100%;
+  padding: 5px 28px 5px 12px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   color: var(--band-ink);
-  font-size: 19px;
+  font-size: 14px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  cursor: pointer;
 }
 
 .band-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   flex: none;
+  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
-.workspace {
+.band-status[data-tone]::before,
+.liveness::before,
+.cell[data-tone]:not(.numeric):not([data-tone="neutral"])::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.band-status[data-tone="good"]::before {
+  background: var(--good);
+}
+
+.band-status[data-tone="bad"] {
+  color: var(--bad);
+}
+
+.band-right {
   display: flex;
-  flex: 1;
-  min-height: 0;
+  align-items: center;
+  gap: 14px;
+  flex: none;
+  margin-left: auto;
+}
+
+.band-forwards {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--accent-soft);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.band-readonly {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.band-readonly[data-on="true"] {
+  color: var(--warn);
+}
+
+.band-readonly input {
+  appearance: none;
+  position: relative;
+  width: 28px;
+  height: 16px;
+  margin: 0;
+  border-radius: 8px;
+  background: var(--line);
+  cursor: pointer;
+  transition: background-color 140ms;
+}
+
+.band-readonly input::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: white;
+  transition: transform 140ms;
+}
+
+.band-readonly input:checked {
+  background: var(--warn);
+}
+
+.band-readonly input:checked::after {
+  transform: translateX(12px);
+}
+
+/* Layout. Content sits on a sheet above the window chrome. */
+
+.workspace {
+  display: contents;
 }
 
 .sidebar {
   display: flex;
-  flex: none;
   flex-direction: column;
-  width: 220px;
-  background: var(--panel);
-  border-right: 1px solid var(--line);
+  grid-column: 1;
+  grid-row: 3 / 5;
+  min-height: 0;
 }
 
 .sidebar-search {
-  margin: 8px;
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--ground);
+  margin: 0 8px 8px 12px;
 }
 
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
-  padding: 0 8px 16px;
+  padding: 0 8px 16px 12px;
 }
 
 .sidebar h2 {
-  margin: 14px 8px 4px;
+  margin: 16px 8px 4px;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 400;
+  font-weight: 500;
+}
+
+.sidebar section:first-child h2 {
+  margin-top: 6px;
 }
 
 .sidebar button {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   width: 100%;
-  overflow: hidden;
-  padding: 3px 8px;
+  min-height: 28px;
+  padding: 4px 8px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 7px;
   background: none;
   text-align: left;
+  cursor: pointer;
+  transition: background-color 100ms;
+}
+
+.sidebar button span {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
+}
+
+.sidebar button svg {
+  flex: none;
+  color: var(--muted);
 }
 
 .sidebar button:hover {
@@ -87,14 +405,26 @@
 }
 
 .sidebar button[aria-current="page"] {
-  background: var(--raised);
+  background: var(--accent-soft);
   font-weight: 600;
 }
 
+.sidebar button[aria-current="page"] svg {
+  color: var(--focus);
+}
+
 .view {
+  position: relative;
   display: flex;
-  flex: 1;
+  grid-column: 2;
+  grid-row: 3;
   min-width: 0;
+  min-height: 0;
+  margin: 0 8px 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--ground);
 }
 
 .main {
@@ -106,20 +436,26 @@
 
 .toolbar {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
   flex: none;
-  padding: 10px 16px;
+  padding: 12px 20px;
 }
 
 .toolbar h1 {
   margin: 0;
-  font-size: 17px;
+  font-size: 18px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .count {
+  padding: 0 7px;
+  border-radius: 10px;
+  background: var(--raised);
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
 }
 
@@ -129,32 +465,44 @@
   margin-left: auto;
 }
 
-.filter,
-.namespace {
-  padding: 4px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-}
-
 .namespace {
   max-width: 180px;
+  padding: 5px 26px 5px 9px;
+  cursor: pointer;
 }
 
 .liveness {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
   flex: none;
-  min-width: 88px;
-  text-align: right;
+  min-width: 56px;
+  font-weight: 500;
 }
 
-.banner {
+.liveness[data-tone="good"]::before {
+  animation: live 2.4s ease-out infinite;
+}
+
+@keyframes live {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--good) 50%, transparent);
+  }
+  70%,
+  100% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+}
+
+.metrics-note {
   flex: none;
   margin: 0;
-  padding: 6px 16px;
-  background: var(--raised);
-  color: var(--bad);
-  overflow-wrap: anywhere;
+  padding: 0 20px 8px;
+  color: var(--muted);
 }
+
+/* Table. */
 
 .table {
   display: flex;
@@ -168,21 +516,31 @@
   display: grid;
   align-items: center;
   column-gap: 12px;
-  padding: 0 16px;
+  padding: 0 20px;
 }
 
 .table-head {
   flex: none;
+  border-top: 1px solid var(--line);
   border-bottom: 1px solid var(--line);
+  background: var(--panel);
 }
 
 .table-head .cell {
-  padding: 4px 0;
+  padding: 6px 0;
   border: 0;
   background: none;
   color: var(--muted);
+  font-size: 12px;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
+}
+
+.table-head .cell:hover,
+.table-head .cell[aria-sort="ascending"],
+.table-head .cell[aria-sort="descending"] {
+  color: var(--ink);
 }
 
 .table-head .cell.numeric {
@@ -200,6 +558,7 @@
   top: 0;
   left: 0;
   width: 100%;
+  border-bottom: 1px solid color-mix(in oklch, var(--line) 45%, transparent);
   cursor: default;
 }
 
@@ -208,7 +567,8 @@
 }
 
 .table-row[aria-selected="true"] {
-  background: var(--raised);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--focus);
 }
 
 .cell {
@@ -218,28 +578,37 @@
   white-space: nowrap;
 }
 
+.table-row .cell:first-child {
+  font-weight: 500;
+}
+
 .cell.numeric {
   font-variant-numeric: tabular-nums;
   text-align: right;
 }
 
-[data-tone="good"] {
-  color: var(--good);
+/* Healthy is the normal state, so only the dot says so. */
+.table-row .cell[data-tone="good"] {
+  color: var(--ink);
 }
 
-[data-tone="warn"] {
-  color: var(--warn);
+.table-row .cell[data-tone="good"]:not(.numeric)::before {
+  background: var(--good);
 }
 
-[data-tone="bad"] {
-  color: var(--bad);
+.cell[data-tone]:not(.numeric):not([data-tone="neutral"])::before {
+  display: inline-block;
+  margin-right: 7px;
+  vertical-align: 1px;
 }
+
+/* Detail panel. */
 
 .detail {
   display: flex;
   flex: none;
   flex-direction: column;
-  width: 400px;
+  width: 380px;
   background: var(--panel);
   border-left: 1px solid var(--line);
 }
@@ -248,58 +617,52 @@
   display: flex;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 16px 6px;
+  padding: 14px 16px 8px;
 }
 
 .detail-head p {
   margin: 0;
+  font-size: 12px;
 }
 
 .detail-head h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .quiet {
+  display: inline-flex;
   flex: none;
   align-self: flex-start;
+  padding: 3px;
   border: 0;
+  border-radius: 6px;
   background: none;
   color: var(--muted);
   cursor: pointer;
 }
 
-.tabs {
-  display: flex;
-  gap: 16px;
-  flex: none;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--line);
-}
-
-.tabs button {
-  padding: 4px 0;
-  border: 0;
-  border-bottom: 2px solid transparent;
-  background: none;
-  color: var(--muted);
-  cursor: pointer;
-}
-
-.tabs button[aria-selected="true"] {
-  border-bottom-color: var(--ink);
+.quiet:hover {
+  background: var(--raised);
   color: var(--ink);
 }
 
 .detail-body {
   flex: 1;
   overflow-y: auto;
-  padding: 4px 16px 16px;
+  padding: 6px 16px 16px;
 }
 
 .detail-section h3 {
-  margin: 14px 0 4px;
+  margin: 18px 0 6px;
   font-size: 13px;
   font-weight: 600;
 }
@@ -307,7 +670,7 @@
 .facts {
   display: grid;
   grid-template-columns: max-content 1fr;
-  gap: 2px 12px;
+  gap: 4px 14px;
   margin: 10px 0 0;
 }
 
@@ -331,7 +694,7 @@
 }
 
 .pairs > div {
-  padding: 2px 0;
+  padding: 3px 0;
 }
 
 .plain,
@@ -342,16 +705,20 @@
 }
 
 .plain li {
-  padding: 2px 0;
+  padding: 3px 0;
 }
 
 .events li {
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--line);
 }
 
 .yaml {
   margin: 10px 0 0;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--ground);
   font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
   font-size: 12px;
   line-height: 1.5;
@@ -359,55 +726,34 @@
   overflow-wrap: anywhere;
 }
 
-.muted {
-  color: var(--muted);
+.yaml-inline {
+  font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  font-size: 12px;
 }
 
-.wrap {
-  overflow-wrap: anywhere;
-}
-
-.message {
-  margin: 0;
-  padding: 24px 16px;
-  max-width: 72ch;
-}
-
-.message p {
-  margin: 0 0 8px;
-}
-
-.message button {
-  padding: 4px 12px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--raised);
-  cursor: pointer;
-}
-
-.action {
-  margin-top: 6px;
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--raised);
-  cursor: pointer;
-}
+/* Dock. */
 
 .dock {
   display: flex;
   flex: none;
   flex-direction: column;
-  height: 40%;
+  grid-column: 2;
+  grid-row: 4;
+  height: 40vh;
   min-height: 180px;
-  border-top: 1px solid var(--line);
+  margin: 0 8px 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 12px;
   background: var(--panel);
 }
 
 .dock-tabs {
   display: flex;
   flex: none;
+  gap: 2px;
   overflow-x: auto;
+  padding: 4px 6px;
   border-bottom: 1px solid var(--line);
 }
 
@@ -415,36 +761,58 @@
   display: flex;
   flex: none;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   max-width: 280px;
-  padding: 0 8px;
-  border-right: 1px solid var(--line);
+  padding: 0 4px 0 8px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+.dock-tab:hover {
+  color: var(--ink);
 }
 
 .dock-tab[data-active="true"] {
-  background: var(--ground);
+  background: var(--raised);
+  color: var(--ink);
 }
 
 .dock-tab button[role="tab"] {
-  overflow: hidden;
-  padding: 5px 2px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 2px;
   border: 0;
   background: none;
+  cursor: pointer;
+}
+
+.dock-tab button[role="tab"] svg {
+  flex: none;
+}
+
+.dock-label {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  cursor: pointer;
 }
 
 .dock-tab .quiet {
   align-self: center;
+  padding: 2px;
 }
 
 .dock-dot {
   display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 6px;
+  flex: none;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
+}
+
+.edit-target .dock-dot {
+  margin-right: 6px;
 }
 
 .log-panel {
@@ -455,12 +823,20 @@
   background: var(--ground);
 }
 
+.log-panel[hidden] {
+  display: none;
+}
+
 .log-toolbar {
   display: flex;
   flex: none;
   align-items: center;
   gap: 14px;
-  padding: 5px 16px;
+  padding: 6px 16px;
+}
+
+.log-toolbar > :not(.log-status) {
+  flex: none;
 }
 
 .log-toolbar label {
@@ -469,20 +845,18 @@
   gap: 4px;
 }
 
-.log-toolbar select,
 .log-toolbar button {
-  padding: 2px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
+  padding: 3px 9px;
 }
 
-.log-toolbar button {
-  cursor: pointer;
+.log-toolbar select {
+  padding: 3px 24px 3px 9px;
 }
 
 .log-status {
-  margin-left: auto;
+  flex: 1;
+  min-width: 0;
+  text-align: right;
 }
 
 .log-view {
@@ -497,15 +871,12 @@
   flex: none;
   align-items: center;
   gap: 10px;
-  padding: 0 16px 5px;
+  padding: 0 16px 6px;
 }
 
 .log-search input {
   flex: 0 1 280px;
   padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
 }
 
 .log-lines {
@@ -532,18 +903,28 @@
 }
 
 .log-line mark {
+  border-radius: 2px;
   background: var(--warn);
   color: var(--ground);
 }
 
-.detail-actions {
-  display: flex;
-  gap: 6px;
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 0 0 4px 16px;
+  overflow: hidden;
 }
 
-.view {
-  position: relative;
+.terminal-host .xterm {
+  height: 100%;
 }
+
+/* xterm paints this black, which shows where rows don't fill the height. */
+.terminal-host .xterm .xterm-viewport {
+  background-color: var(--ground);
+}
+
+/* Editors. */
 
 .edit {
   position: absolute;
@@ -556,29 +937,43 @@
 
 .edit-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 16px;
   flex: none;
-  padding: 10px 16px;
+  padding: 12px 20px;
 }
 
 .edit-head h2 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .edit-target {
+  display: flex;
+  align-items: center;
   flex: none;
+  color: var(--muted);
+}
+
+.edit-note {
+  flex: 1;
+  min-width: 0;
+  align-self: center;
+}
+
+.edit-note p {
+  margin: 0;
 }
 
 .edit-failure {
   flex: none;
   max-height: 40%;
   overflow-y: auto;
-  padding: 8px 16px;
-  background: var(--raised);
+  padding: 10px 20px;
+  background: color-mix(in oklch, var(--warn) 12%, transparent);
 }
 
 .edit-failure p {
@@ -602,53 +997,44 @@
   justify-content: flex-end;
   gap: 8px;
   flex: none;
-  padding: 8px 16px;
+  padding: 10px 16px;
 }
 
 .edit-actions button {
-  padding: 5px 12px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-  cursor: pointer;
+  padding: 5px 13px;
+  font-weight: 500;
 }
 
 .edit-actions button:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
 }
 
 .edit-actions .primary {
   border-color: transparent;
-  background: var(--raised);
+  background: var(--accent);
+  color: var(--band-ink);
   font-weight: 600;
 }
 
-.edit-actions [data-testid="edit-apply"] {
-  color: var(--band-ink);
+.edit-actions .primary:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in oklch, var(--accent) 88%, white);
 }
 
-.band-right {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex: none;
+.edit-actions .danger {
+  border-color: transparent;
+  background: var(--bad);
+  color: var(--ground);
+  font-weight: 600;
 }
 
-.band-readonly {
-  display: flex;
-  align-items: center;
-  gap: 4px;
+.edit-actions .danger:hover:not(:disabled) {
+  border-color: transparent;
+  background: color-mix(in oklch, var(--bad) 88%, black);
 }
 
-/* The band stays light in dark mode, where an empty dark box looks ticked. */
-.band-readonly input {
-  color-scheme: light;
-}
-
-.detail-actions {
-  flex-wrap: wrap;
-}
+/* Dialogs. */
 
 .scrim {
   position: absolute;
@@ -658,7 +1044,9 @@
   align-items: center;
   justify-content: center;
   padding: 16px;
-  background: color-mix(in srgb, var(--ground) 70%, transparent);
+  background: color-mix(in oklch, var(--chrome) 60%, transparent);
+  backdrop-filter: blur(3px);
+  animation: fade 120ms ease-out;
 }
 
 .confirm {
@@ -666,26 +1054,41 @@
   width: 460px;
   max-width: 100%;
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: 12px;
   background: var(--panel);
+  box-shadow: var(--shadow);
+  animation: rise 160ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-/* Repeats the top band, so the cluster is named where the decision is made. */
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px) scale(0.985);
+  }
+}
+
+/* Repeats the cluster chip, so the cluster is named where the decision is made. */
 .confirm-band {
-  padding: 6px 16px;
+  padding: 7px 16px;
   color: var(--band-ink);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   overflow-wrap: anywhere;
 }
 
 .confirm-body {
-  padding: 12px 16px 4px;
+  padding: 14px 16px 4px;
 }
 
 .confirm-body h2 {
   margin: 0;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
 }
 
@@ -700,60 +1103,20 @@
 }
 
 .confirm-field input {
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--ground);
+  padding: 6px 9px;
 }
 
-.edit-actions .danger {
-  border-color: transparent;
-  background: var(--bad);
-  color: var(--ground);
-  font-weight: 600;
-}
-
-.yaml-inline {
-  font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
-  font-size: 12px;
-}
-
-.log-panel[hidden] {
-  display: none;
-}
-
-.terminal-host {
-  flex: 1;
-  min-height: 0;
-  padding: 0 0 4px 16px;
-  overflow: hidden;
-}
-
-.terminal-host .xterm {
-  height: 100%;
-}
-
-/* xterm paints this black, which shows where rows don't fill the height. */
-.terminal-host .xterm .xterm-viewport {
-  background-color: var(--ground);
-}
-
-.band-forwards {
-  padding: 1px 8px;
-  border: 1px solid var(--band-ink);
-  border-radius: 4px;
-  background: none;
-  color: var(--band-ink);
-  cursor: pointer;
-}
+/* Port forwards. */
 
 .forward-alert {
   display: flex;
   flex: none;
   align-items: center;
   gap: 8px;
-  padding: 4px 16px;
-  background: var(--raised);
+  margin: 0 8px 8px;
+  padding: 6px 12px;
+  border-radius: 9px;
+  background: color-mix(in oklch, var(--bad) 14%, transparent);
   color: var(--bad);
 }
 
@@ -782,6 +1145,7 @@
 
 .forward-ports .action[aria-pressed="true"] {
   border-color: var(--focus);
+  background: var(--accent-soft);
 }
 
 .forward-panel {
@@ -798,15 +1162,16 @@
 .forward-table th {
   position: sticky;
   top: 0;
-  padding: 5px 12px;
+  padding: 6px 12px;
   background: var(--panel);
   color: var(--muted);
-  font-weight: 400;
+  font-size: 12px;
+  font-weight: 500;
   text-align: left;
 }
 
 .forward-table td {
-  padding: 5px 12px;
+  padding: 6px 12px;
   border-top: 1px solid var(--line);
   vertical-align: top;
 }
@@ -831,12 +1196,7 @@
   margin: 0 0 0 6px;
 }
 
-.metrics-note {
-  flex: none;
-  margin: 0;
-  padding: 2px 16px 6px;
-  color: var(--muted);
-}
+/* Helm. */
 
 .helm-install {
   flex: none;
@@ -848,7 +1208,7 @@
   flex: none;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 8px 16px;
-  padding: 0 16px 10px;
+  padding: 0 20px 10px;
 }
 
 .helm-fields > label {
@@ -857,10 +1217,7 @@
 }
 
 .helm-fields input:not([type="checkbox"]) {
-  padding: 5px 8px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
+  padding: 6px 9px;
 }
 
 .helm-options {
@@ -891,5 +1248,5 @@
 .helm-values-label {
   flex: none;
   margin: 0;
-  padding: 0 16px 4px;
+  padding: 0 20px 4px;
 }
