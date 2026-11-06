@@ -24,6 +24,11 @@ type APIResource struct {
 	Resource   string `json:"resource"`
 	Kind       string `json:"kind"`
 	Namespaced bool   `json:"namespaced"`
+	Editable   bool   `json:"editable"`
+	Deletable  bool   `json:"deletable"`
+	Scalable   bool   `json:"scalable"`
+	// Restartable is true for types with a rolling restart.
+	Restartable bool `json:"restartable"`
 }
 
 // Discovery is the result of asking a cluster what it serves.
@@ -52,6 +57,7 @@ func Discover(ctx context.Context, config *rest.Config) (Discovery, error) {
 		result.Warnings = append(result.Warnings, err.Error())
 	}
 
+	subresources := listSubresources(client)
 	for _, list := range lists {
 		groupVersion, err := schema.ParseGroupVersion(list.GroupVersion)
 		if err != nil {
@@ -70,6 +76,13 @@ func Discover(ctx context.Context, config *rest.Config) (Discovery, error) {
 				Resource:   resource.Name,
 				Kind:       resource.Kind,
 				Namespaced: resource.Namespaced,
+				// Server-side apply is a patch request.
+				Editable:  slices.Contains(resource.Verbs, "patch"),
+				Deletable: slices.Contains(resource.Verbs, "delete"),
+				Scalable:  subresources[list.GroupVersion+"/"+resource.Name+"/scale"],
+				Restartable: Restartable(schema.GroupVersionResource{
+					Group: groupVersion.Group, Version: groupVersion.Version, Resource: resource.Name,
+				}),
 			})
 		}
 	}
@@ -77,4 +90,21 @@ func Discover(ctx context.Context, config *rest.Config) (Discovery, error) {
 		return cmp.Or(cmp.Compare(a.Group, b.Group), cmp.Compare(a.Resource, b.Resource))
 	})
 	return result, nil
+}
+
+// listSubresources returns "group/version/resource/subresource" keys. The
+// preferred-resources call above leaves subresources out, so finding out what
+// can be scaled takes this second call. A failure only hides the Scale action,
+// so it is not worth failing discovery for.
+func listSubresources(client discovery.DiscoveryInterface) map[string]bool {
+	found := make(map[string]bool)
+	_, lists, _ := client.ServerGroupsAndResources()
+	for _, list := range lists {
+		for _, resource := range list.APIResources {
+			if strings.Contains(resource.Name, "/") {
+				found[list.GroupVersion+"/"+resource.Name] = true
+			}
+		}
+	}
+	return found
 }
