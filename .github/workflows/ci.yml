@@ -40,7 +40,7 @@ jobs:
       - run: |
           printf 'kind: Cluster\napiVersion: kind.x-k8s.io/v1alpha4\nnetworking:\n  apiServerAddress: "0.0.0.0"\n  apiServerPort: 6443\n' > kind.yaml
           kind create cluster --name ci --config kind.yaml
-          bridge=$(docker network inspect bridge --format '{{(index .IPAM.Config 0).Gateway}}')
+          bridge=$(ip -4 -o addr show docker0 | awk '{print $4}' | cut -d/ -f1)
           kubectl config set-cluster kind-ci --server="https://$bridge:6443" --tls-server-name=localhost
           chmod 600 ~/.kube/config
       - run: |
@@ -49,7 +49,7 @@ jobs:
           token=$(sed -n 's/.*#token=//p' run.log)
           curl -fsS -o /dev/null http://localhost:8765/
           curl -fsS -H "Authorization: Bearer $token" http://localhost:8765/api/v1/contexts/kind-ci/status | tee status.json
-          grep -q '"reachable":true' status.json
+          grep -q '"reachable":true' status.json || { echo "::error::$(cat status.json)"; exit 1; }
 
   # Builds on every push, so that a broken desktop build shows up before a release.
   desktop:
