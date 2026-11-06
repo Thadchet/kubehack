@@ -28,7 +28,7 @@ EXPOSE 8765
 ENTRYPOINT ["/app/kubehack-docker"]
 
 # For GKE, whose credential plugin needs gcloud.
-FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:alpine AS kubehack-gke
+FROM gcr.io/google.com/cloudsdktool/google-cloud-cli:592.0.0-alpine AS kubehack-gke
 RUN gcloud components install gke-gcloud-auth-plugin --quiet \
   && rm -rf /google-cloud-sdk/.install/.backup \
   && install -d -o nobody /settings

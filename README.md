@@ -72,7 +72,7 @@ instead of its own window. You only need
 been tested on a Mac with Docker Desktop.
 
 ```sh
-docker run --rm -p 127.0.0.1:8765:8765 \
+docker run --rm --pull always -p 127.0.0.1:8765:8765 \
   -v ~/.kube/config:/kube/config:ro \
   -v kubehack:/settings \
   ghcr.io/thadchet/kubehack
@@ -83,16 +83,17 @@ instead of 100 MB because it holds `gcloud`. It also needs your sign-in, with wr
 access because `gcloud` requires it.
 
 ```sh
-docker run --rm -p 127.0.0.1:8765:8765 \
+docker run --rm --pull always -p 127.0.0.1:8765:8765 \
   -v ~/.kube/config:/kube/config:ro \
   -v ~/.config/gcloud:/gcloud \
   -v kubehack:/settings \
   ghcr.io/thadchet/kubehack:gke
 ```
 
-Open the link the terminal shows. Press Ctrl+C to stop Kubehack. To update, run
-`docker pull` with the same image name. To stay on one version, add it to the image
-name, such as `ghcr.io/thadchet/kubehack:1.0.0` or `:1.0.0-gke`.
+Open the link the terminal shows. Press Ctrl+C to stop Kubehack. `--pull always`
+gets the latest release each time you start it, so there's no separate update step.
+To stay on one version, add it to the image name, such as
+`ghcr.io/thadchet/kubehack:1.0.0` or `:1.0.0-gke`.
 
 Keep `127.0.0.1` in the `-p` option. The link holds a secret token, and anyone with
 it can use your cluster access, so don't share it or open the port to your network.
@@ -224,6 +225,8 @@ Report bugs and ask for features in
 use (Mac, Windows or Docker) and what you expected. Don't paste your kubeconfig,
 tokens, Secret values or a Docker link, because issues are public.
 
+To report a security problem, follow [SECURITY.md](SECURITY.md) instead.
+
 ## Remove Kubehack
 
 Delete the app, then delete its saved settings. For Docker, run
@@ -279,8 +282,12 @@ Set `KUBEHACK_DEBUG=1` to log API requests. Set `KUBECONFIG` before any of these
 `run.sh` commands to limit a run to certain clusters.
 
 **Release.** Tests run on every pull request and push. Pushing to `main` then
-publishes the `edge` and `edge-gke` images. Pushing a version tag, such as `v1.0.0`,
-publishes that version and moves `latest` and `gke` to it.
+publishes the `edge` and `edge-gke` images, and builds the downloads. Pushing a
+version tag, such as `v1.0.0`, also publishes that version, moves `latest` and `gke`
+to it, and creates a GitHub release with the downloads. The Mac app is signed and
+notarized if the repository has the `APPLE_CERTIFICATE`,
+`APPLE_CERTIFICATE_PASSWORD`, `APPLE_ID`, `APPLE_TEAM_ID` and `APPLE_APP_PASSWORD`
+secrets, where the certificate is a base64 Developer ID Application `.p12` file.
 
 **Test.**
 
