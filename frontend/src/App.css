@@ -712,3 +712,18 @@
   font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
   font-size: 12px;
 }
+
+.log-panel[hidden] {
+  display: none;
+}
+
+.terminal-host {
+  flex: 1;
+  min-height: 0;
+  padding: 0 0 4px 16px;
+  overflow: hidden;
+}
+
+.terminal-host .xterm {
+  height: 100%;
+}

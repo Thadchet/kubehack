@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { contextColor } from "./features/cluster/contextColor";
 import { useCluster } from "./features/cluster/useCluster";
-import { LogDock, logTarget, type LogTarget } from "./features/logs/LogDock";
+import { Dock, dockTarget, type DockKind, type DockTarget } from "./features/dock/Dock";
 import { resourceId } from "./features/resources/kinds";
 import { ResourceView } from "./features/resources/ResourceView";
 import type { KubeObject } from "./features/resources/useResourceWatch";
@@ -14,8 +14,8 @@ export default function App() {
   const cluster = useCluster();
   const [resourceKey, setResourceKey] = useState(defaultResource);
   const [namespace, setNamespace] = useState("");
-  const [logTabs, setLogTabs] = useState<LogTarget[]>([]);
-  const [activeLog, setActiveLog] = useState<string>();
+  const [dockTabs, setDockTabs] = useState<DockTarget[]>([]);
+  const [activeTab, setActiveTab] = useState<string>();
 
   const { contexts, selected, status, resources } = cluster;
   const context = contexts?.find((item) => item.name === selected);
@@ -32,18 +32,18 @@ export default function App() {
     cluster.select(name);
   };
 
-  const openLogs = (pod: KubeObject) => {
-    const target = logTarget(selected, pod);
-    setLogTabs((tabs) => (tabs.some((tab) => tab.id === target.id) ? tabs : [...tabs, target]));
-    setActiveLog(target.id);
+  const openTab = (kind: DockKind, pod: KubeObject) => {
+    const target = dockTarget(kind, selected, pod);
+    setDockTabs((tabs) => (tabs.some((tab) => tab.id === target.id) ? tabs : [...tabs, target]));
+    setActiveTab(target.id);
   };
 
-  const closeLogs = (id: string) => {
-    const index = logTabs.findIndex((tab) => tab.id === id);
-    const remaining = logTabs.filter((tab) => tab.id !== id);
-    setLogTabs(remaining);
-    if (activeLog === id) {
-      setActiveLog(remaining[Math.min(index, remaining.length - 1)]?.id);
+  const closeTab = (id: string) => {
+    const index = dockTabs.findIndex((tab) => tab.id === id);
+    const remaining = dockTabs.filter((tab) => tab.id !== id);
+    setDockTabs(remaining);
+    if (activeTab === id) {
+      setActiveTab(remaining[Math.min(index, remaining.length - 1)]?.id);
     }
   };
 
@@ -140,19 +140,14 @@ export default function App() {
             resource={resource}
             namespace={namespace}
             onNamespace={setNamespace}
-            onOpenLogs={openLogs}
+            onOpenDock={openTab}
             readOnly={cluster.readOnly}
           />
         </div>
       )}
 
-      {logTabs.length > 0 && (
-        <LogDock
-          tabs={logTabs}
-          activeId={activeLog}
-          onActivate={setActiveLog}
-          onClose={closeLogs}
-        />
+      {dockTabs.length > 0 && (
+        <Dock tabs={dockTabs} activeId={activeTab} onActivate={setActiveTab} onClose={closeTab} />
       )}
     </div>
   );

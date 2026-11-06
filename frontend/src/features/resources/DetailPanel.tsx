@@ -16,6 +16,7 @@ interface Props {
   resource: APIResource;
   onClose: () => void;
   onOpenLogs?: () => void;
+  onOpenShell?: () => void;
   onEdit?: () => void;
   // Missing while the context is read-only.
   onAction?: (type: ActionType) => void;
@@ -182,6 +183,7 @@ export function DetailPanel({
   resource,
   onClose,
   onOpenLogs,
+  onOpenShell,
   onEdit,
   onAction,
 }: Props) {
@@ -199,6 +201,11 @@ export function DetailPanel({
             {onOpenLogs && (
               <button type="button" className="action" onClick={onOpenLogs}>
                 View logs (l)
+              </button>
+            )}
+            {onOpenShell && (
+              <button type="button" className="action" onClick={onOpenShell}>
+                Open shell (s)
               </button>
             )}
             {onEdit && (

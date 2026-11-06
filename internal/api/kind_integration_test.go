@@ -643,3 +643,176 @@ func TestKindReadOnlyProtectsAndPersists(t *testing.T) {
 		t.Errorf("value = %q", got)
 	}
 }
+
+type kindShell struct {
+	t    *testing.T
+	ctx  context.Context
+	conn *websocket.Conn
+	// unread is output after the last match. Two commands' output can arrive in
+	// one frame, so the next expect has to start from here.
+	unread *strings.Builder
+}
+
+func openKindShell(t *testing.T, server *Server, pod string) kindShell {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	t.Cleanup(cancel)
+	path := "/api/v1/contexts/" + kindContext + "/exec?namespace=default&pod=" + pod + "&cols=91&rows=33"
+	conn, _, err := websocket.Dial(ctx, wsURL(server, path), &websocket.DialOptions{
+		Subprotocols: []string{wsProtocol, wsTokenPrefix + server.Token()},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.CloseNow() })
+	return kindShell{t, ctx, conn, &strings.Builder{}}
+}
+
+func (s kindShell) send(text string) {
+	s.t.Helper()
+	if err := s.conn.Write(s.ctx, websocket.MessageBinary, []byte(text)); err != nil {
+		s.t.Fatal(err)
+	}
+}
+
+// expect reads output until it holds want. A marker built at runtime, such as
+// $((1+2)), proves the shell ran the command rather than echoing the input.
+func (s kindShell) expect(want string) {
+	s.t.Helper()
+	seen := s.unread
+	for !strings.Contains(seen.String(), want) {
+		kind, content, err := s.conn.Read(s.ctx)
+		if err != nil {
+			s.t.Fatalf("waiting for %q, saw %q: %v", want, seen.String(), err)
+		}
+		if kind == websocket.MessageText {
+			s.t.Fatalf("waiting for %q, saw %q, got %s", want, seen.String(), content)
+		}
+		seen.Write(content)
+	}
+	_, rest, _ := strings.Cut(seen.String(), want)
+	seen.Reset()
+	seen.WriteString(rest)
+}
+
+func (s kindShell) exitFrame() execExit {
+	s.t.Helper()
+	for {
+		kind, content, err := s.conn.Read(s.ctx)
+		if err != nil {
+			s.t.Fatal(err)
+		}
+		if kind != websocket.MessageText {
+			continue
+		}
+		var exit execExit
+		if err := json.Unmarshal(content, &exit); err != nil {
+			s.t.Fatal(err)
+		}
+		return exit
+	}
+}
+
+func runShellPod(t *testing.T, name, image string, command ...string) {
+	t.Helper()
+	args := append([]string{"run", name, "--image=" + image, "--restart=Never", "--command", "--"}, command...)
+	kubectl(t, "", args...)
+	t.Cleanup(func() {
+		exec.Command("kubectl", "--context", kindContext, "delete", "pod", name, "--now", "--ignore-not-found").Run()
+	})
+	kubectl(t, "", "wait", "--for=condition=Ready", "pod/"+name, "--timeout=240s")
+}
+
+func TestKindShellRunsCommandsAndResizes(t *testing.T) {
+	runShellPod(t, "kh-shell", "busybox:1.36", "sleep", "3600")
+	server := startKindServer(t)
+	shell := openKindShell(t, server, "kh-shell")
+
+	shell.send("echo kh-$((1+2))\n")
+	shell.expect("kh-3")
+
+	// busybox has no bash, so this also covers the fallback.
+	shell.send("stty size; echo end-$((2+2))\n")
+	shell.expect("33 91")
+	shell.expect("end-4")
+
+	resize, err := json.Marshal(execControl{Type: "resize", Cols: 120, Rows: 40})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := shell.conn.Write(shell.ctx, websocket.MessageText, resize); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+	shell.send("stty size\n")
+	shell.expect("40 120")
+
+	shell.send("exit 7\n")
+	if exit := shell.exitFrame(); exit.Code != 7 {
+		t.Errorf("exit = %+v", exit)
+	}
+}
+
+func TestKindShellPrefersBash(t *testing.T) {
+	runShellPod(t, "kh-bash", "bash:5.2", "sleep", "3600")
+	shell := openKindShell(t, startKindServer(t), "kh-bash")
+
+	shell.send("echo shell-$BASH_VERSION-$((1+2))\n")
+	shell.expect("shell-5.")
+}
+
+func TestKindClosingShellLeavesNoProcess(t *testing.T) {
+	runShellPod(t, "kh-orphan", "busybox:1.36", "sleep", "3600")
+	server := startKindServer(t)
+	shell := openKindShell(t, server, "kh-orphan")
+	shell.send("sleep 7777 & echo started-$((1+1))\n")
+	shell.expect("started-2")
+	shell.send("echo $$ > /tmp/shell-pid; echo noted-$((1+1))\n")
+	shell.expect("noted-2")
+	pid := strings.TrimSpace(kubectl(t, "", "exec", "kh-orphan", "--", "cat", "/tmp/shell-pid"))
+
+	// A foreground program is the hard case: it would swallow typed input.
+	shell.send("top\n")
+	shell.expect("Mem:")
+
+	shell.conn.Close(websocket.StatusNormalClosure, "")
+
+	// The pod's PID 1 is sleep, which never reaps, so ended processes stay as
+	// zombies and have to be told apart from running ones.
+	probe := `for p in /proc/[0-9]*; do
+  state=$(sed -n 's/^State:[[:space:]]*\(.\).*/\1/p' "$p/status" 2>/dev/null)
+  [ "$state" = Z ] && continue
+  command=$(tr '\0' ' ' < "$p/cmdline" 2>/dev/null)
+  [ "${p#/proc/}" = "` + pid + `" ] && echo "alive shell"
+  case "$command" in
+    "top "*|"sleep 7777 "*) echo "alive $command";;
+  esac
+done
+echo checked`
+	deadline := time.Now().Add(15 * time.Second)
+	for {
+		out, err := exec.Command("kubectl", "--context", kindContext, "exec", "kh-orphan", "--",
+			"sh", "-c", probe).CombinedOutput()
+		if err != nil {
+			t.Fatalf("%v: %s", err, out)
+		}
+		if !strings.Contains(string(out), "alive") {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("processes outlived the socket: %s", out)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+}
+
+func TestKindShellReportsImageWithoutShell(t *testing.T) {
+	runShellPod(t, "kh-noshell", "registry.k8s.io/pause:3.10", "/pause")
+	shell := openKindShell(t, startKindServer(t), "kh-noshell")
+
+	exit := shell.exitFrame()
+	t.Logf("exit = %+v", exit)
+	if exit.Code == 0 {
+		t.Errorf("exit = %+v", exit)
+	}
+}

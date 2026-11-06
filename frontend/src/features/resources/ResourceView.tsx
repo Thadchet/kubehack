@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { APIResource } from "../cluster/useCluster";
 import { ActionDialog, type ActionType } from "../actions/ActionDialog";
+import type { DockKind } from "../dock/Dock";
 import { EditDialog } from "../editor/EditDialog";
 import { columnsFor, hasPhase } from "./columns";
 import { DetailPanel } from "./DetailPanel";
@@ -21,7 +22,7 @@ interface Props {
   resource: APIResource;
   namespace: string;
   onNamespace: (namespace: string) => void;
-  onOpenLogs: (pod: KubeObject) => void;
+  onOpenDock: (kind: DockKind, pod: KubeObject) => void;
   readOnly: boolean;
 }
 
@@ -40,7 +41,7 @@ export function ResourceView({
   resource,
   namespace,
   onNamespace,
-  onOpenLogs,
+  onOpenDock,
   readOnly,
 }: Props) {
   const scope = resource.namespaced ? namespace : "";
@@ -92,7 +93,10 @@ export function ResourceView({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (editing || action) {
+      // Keys in the dock belong to it. Esc in particular is everyday input in a
+      // terminal, for example in vim.
+      const inDock = event.target instanceof Element && event.target.closest(".dock");
+      if (editing || action || inDock) {
         return;
       }
       if (event.key === "Escape") {
@@ -113,7 +117,11 @@ export function ResourceView({
         return;
       }
       if (event.key === "l" && isPods && selectedObject) {
-        onOpenLogs(selectedObject);
+        onOpenDock("logs", selectedObject);
+        return;
+      }
+      if (event.key === "s" && isPods && !readOnly && selectedObject) {
+        onOpenDock("terminal", selectedObject);
         return;
       }
       if (event.key === "e" && resource.editable && !readOnly && selectedObject) {
@@ -135,7 +143,7 @@ export function ResourceView({
     selected,
     selectedObject,
     isPods,
-    onOpenLogs,
+    onOpenDock,
     editing,
     action,
     resource.editable,
@@ -247,7 +255,10 @@ export function ResourceView({
           object={selectedObject}
           resource={resource}
           onClose={() => setSelected(undefined)}
-          onOpenLogs={isPods ? () => onOpenLogs(selectedObject) : undefined}
+          onOpenLogs={isPods ? () => onOpenDock("logs", selectedObject) : undefined}
+          onOpenShell={
+            isPods && !readOnly ? () => onOpenDock("terminal", selectedObject) : undefined
+          }
           onEdit={resource.editable && !readOnly ? () => setEditing(selectedObject) : undefined}
           onAction={readOnly ? undefined : (type) => setAction({ type, object: selectedObject })}
         />

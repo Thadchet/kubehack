@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"kubehack/internal/cluster"
@@ -29,18 +30,26 @@ type Options struct {
 	NewClient resources.ClientFactory
 	// OpenLogs overrides how logs are read, for tests.
 	OpenLogs stream.LogOpener
+	// RunShell overrides how shells run, for tests.
+	RunShell stream.ExecRunner
+	// HangupShell overrides how dropped shells are ended, for tests.
+	HangupShell stream.ShellCloser
 	// Settings holds user preferences. Nil keeps them in memory only.
 	Settings *settings.Store
 }
 
 // Server is an API server that only listens on the loopback interface.
 type Server struct {
-	token    string
-	origins  map[string]struct{}
-	listener net.Listener
-	http     *http.Server
-	hub      *resources.Hub
-	openLogs stream.LogOpener
+	token       string
+	origins     map[string]struct{}
+	listener    net.Listener
+	http        *http.Server
+	hub         *resources.Hub
+	openLogs    stream.LogOpener
+	runShell    stream.ExecRunner
+	hangupShell stream.ShellCloser
+	// sessions counts open shells, which http.Server.Shutdown does not track.
+	sessions sync.WaitGroup
 	// newClient builds dynamic clients for requests outside the hub.
 	newClient resources.ClientFactory
 	settings  *settings.Store
@@ -79,6 +88,16 @@ func New(opts Options) (*Server, error) {
 		openLogs = stream.OpenLogs
 	}
 
+	runShell := opts.RunShell
+	if runShell == nil {
+		runShell = stream.RunShell
+	}
+
+	hangupShell := opts.HangupShell
+	if hangupShell == nil {
+		hangupShell = stream.Hangup
+	}
+
 	store := opts.Settings
 	if store == nil {
 		if store, err = settings.Open(""); err != nil {
@@ -88,14 +107,16 @@ func New(opts Options) (*Server, error) {
 
 	baseCtx, cancel := context.WithCancel(context.Background())
 	s := &Server{
-		token:     token,
-		origins:   origins,
-		listener:  listener,
-		hub:       resources.NewHub(newClient),
-		openLogs:  openLogs,
-		newClient: newClient,
-		settings:  store,
-		cancel:    cancel,
+		token:       token,
+		origins:     origins,
+		listener:    listener,
+		hub:         resources.NewHub(newClient),
+		openLogs:    openLogs,
+		runShell:    runShell,
+		hangupShell: hangupShell,
+		newClient:   newClient,
+		settings:    store,
+		cancel:      cancel,
 	}
 	handler := s.guard(s.routes())
 	if opts.Debug {
@@ -137,6 +158,16 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	err := s.http.Shutdown(ctx)
 	s.cancel()
 	s.hub.Close()
+
+	finished := make(chan struct{})
+	go func() {
+		s.sessions.Wait()
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-ctx.Done():
+	}
 	return err
 }
 
@@ -150,6 +181,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/contexts/{name}/resources", discoverResources)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/watch", s.watchResource)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/logs", s.streamLogs)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/exec", s.execShell)
 	mux.HandleFunc("GET /api/v1/contexts/{name}/object", s.loadObject)
 	mux.HandleFunc("POST /api/v1/contexts/{name}/apply", s.applyObject)
 	mux.HandleFunc("POST /api/v1/contexts/{name}/delete", s.handleAction(deleteObject))
