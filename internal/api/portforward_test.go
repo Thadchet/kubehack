@@ -248,3 +248,38 @@ func TestWatchForwardsPushesChanges(t *testing.T) {
 		return len(forwards) == 1 && forwards[0].State == stream.ForwardLost && forwards[0].Message != ""
 	})
 }
+
+func TestStartedForwardIsRemembered(t *testing.T) {
+	server := startForwardServer(t, &stubForwards{drop: make(chan struct{})})
+	if response, body := postForward(t, server, startPath, forwardBody); response.StatusCode != http.StatusCreated {
+		t.Fatalf("status = %d: %s", response.StatusCode, body)
+	}
+
+	request, err := http.NewRequest(http.MethodGet,
+		server.BaseURL()+startPath+"/recent?namespace=default&kind=pod&name=p1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	request.Header.Set("Authorization", "Bearer secret")
+	response, err := http.DefaultClient.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var recent []settings.RecentForward
+	if err := json.NewDecoder(response.Body).Decode(&recent); err != nil {
+		t.Fatal(err)
+	}
+	// The stub binds 4321 although the request asked for any free port.
+	if len(recent) != 1 || recent[0].Port != 80 || recent[0].LocalPort != 4321 || recent[0].Context != "test" {
+		t.Fatalf("recent = %+v", recent)
+	}
+}
+
+func TestFailedForwardIsNotRemembered(t *testing.T) {
+	server := startForwardServer(t, &stubForwards{failure: stream.ErrLocalPortInUse})
+	postForward(t, server, startPath, forwardBody)
+	if recent := server.settings.RecentForwards("test", "default", "pod", "p1"); len(recent) != 0 {
+		t.Fatalf("recent = %+v", recent)
+	}
+}

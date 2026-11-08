@@ -171,7 +171,8 @@ upgrade it, roll it back to an earlier revision, or uninstall it.
 - Closing a terminal tab ends everything running in that shell, like closing a
   terminal window. Use `nohup` for anything that needs to carry on.
 - Port forwards stop when you quit Kubehack. If one drops, a message at the top
-  says why and offers **Reconnect**.
+  says why and offers **Reconnect**. Kubehack remembers the ports, so the next
+  forward to the same pod or service suggests the same local port.
 - Any program on your computer can reach a forwarded port, as with
   `kubectl port-forward`. Other computers can't.
 - Deleting a ConfigMap or Secret key that another tool manages, such as Helm or

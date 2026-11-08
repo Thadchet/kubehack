@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/coder/websocket"
@@ -11,6 +12,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 
 	"kubehack/internal/cluster"
+	"kubehack/internal/settings"
 	"kubehack/internal/stream"
 )
 
@@ -69,7 +71,28 @@ func (s *Server) startForward(w http.ResponseWriter, r *http.Request) {
 		writeForwardError(w, err)
 		return
 	}
+	// The local port is the one that was bound, so a forward that asked for any
+	// free port is offered the same one next time. Failing to save only loses
+	// that suggestion, so the forward still succeeds.
+	if err := s.settings.RememberForward(settings.RecentForward{
+		Context:   forward.Context,
+		Namespace: forward.Namespace,
+		Kind:      string(forward.Kind),
+		Name:      forward.Name,
+		Port:      forward.Port,
+		LocalPort: forward.LocalPort,
+	}); err != nil {
+		log.Printf("remember port forward: %v", err)
+	}
 	writeJSON(w, http.StatusCreated, forward)
+}
+
+// recentForwards lists the ports used before for one object, newest first.
+func (s *Server) recentForwards(w http.ResponseWriter, r *http.Request) {
+	query := r.URL.Query()
+	writeJSON(w, http.StatusOK, s.settings.RecentForwards(
+		r.PathValue("name"), query.Get("namespace"), query.Get("kind"), query.Get("name"),
+	))
 }
 
 func (s *Server) restartForward(w http.ResponseWriter, r *http.Request) {

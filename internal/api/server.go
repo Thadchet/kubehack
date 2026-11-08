@@ -238,6 +238,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/contexts/{name}/scale", s.handleAction(scaleObject))
 	mux.HandleFunc("POST /api/v1/contexts/{name}/restart", s.handleAction(restartObject))
 	mux.HandleFunc("POST /api/v1/contexts/{name}/portforwards", s.startForward)
+	mux.HandleFunc("GET /api/v1/contexts/{name}/portforwards/recent", s.recentForwards)
 	mux.HandleFunc("GET /api/v1/portforwards/watch", s.watchForwards)
 	mux.HandleFunc("POST /api/v1/portforwards/{id}/restart", s.restartForward)
 	mux.HandleFunc("POST /api/v1/portforwards/{id}/stop", s.stopForward)

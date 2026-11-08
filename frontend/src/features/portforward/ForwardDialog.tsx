@@ -1,8 +1,9 @@
-import { useState, type FormEvent } from "react";
-import { apiPost } from "../../api";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { apiGet, apiPost } from "../../api";
 import { toFailure, type Failure } from "../actions/failure";
 import { contextColor } from "../cluster/contextColor";
 import type { KubeObject } from "../resources/useResourceWatch";
+import { initialPort, rememberedLocalPort, type RecentForward } from "./recentForwards";
 
 export type ForwardKind = "pod" | "service";
 
@@ -68,10 +69,56 @@ function failureText(failure: Failure, localPort: string): string {
 export function ForwardDialog({ kind, context, object, onClose, onStarted }: Props) {
   const { name, namespace = "default" } = object.metadata;
   const ports = knownPorts(kind, object);
-  const [port, setPort] = useState(ports[0] ? String(ports[0].port) : "");
-  const [localPort, setLocalPort] = useState("");
+  const [port, setPortValue] = useState(() => initialPort([], ports.map((item) => item.port)));
+  const [localPort, setLocalPortValue] = useState("");
+  const [recent, setRecent] = useState<RecentForward[]>([]);
   const [busy, setBusy] = useState(false);
   const [failure, setFailure] = useState<Failure>();
+  // Once the user picks a port or types a local one, remembered ports no longer
+  // replace what they chose.
+  const portTouched = useRef(false);
+  const localTouched = useRef(false);
+  const currentPort = useRef(port);
+
+  const setPort = (value: string) => {
+    portTouched.current = true;
+    currentPort.current = value;
+    setPortValue(value);
+    if (!localTouched.current) {
+      setLocalPortValue(rememberedLocalPort(recent, value));
+    }
+  };
+
+  const setLocalPort = (value: string) => {
+    localTouched.current = true;
+    setLocalPortValue(value);
+  };
+
+  useEffect(() => {
+    let cancelled = false;
+    const query = new URLSearchParams({ namespace, kind, name });
+    apiGet<RecentForward[]>(
+      `/api/v1/contexts/${encodeURIComponent(context)}/portforwards/recent?${query}`,
+    )
+      .then((found) => {
+        if (cancelled || found.length === 0) {
+          return;
+        }
+        setRecent(found);
+        if (!portTouched.current) {
+          currentPort.current = initialPort(found, []);
+          setPortValue(currentPort.current);
+        }
+        if (!localTouched.current) {
+          setLocalPortValue(rememberedLocalPort(found, currentPort.current));
+        }
+      })
+      // Without the history the dialog still works, it just suggests nothing.
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [context, namespace, kind, name]);
 
   const ready = !busy && validPort(port, false) && validPort(localPort, true);
 
