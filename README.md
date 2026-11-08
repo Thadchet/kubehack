@@ -38,6 +38,19 @@ tools.
 
 ### Mac
 
+With [Homebrew](https://brew.sh):
+
+```sh
+brew tap thadchet/tap
+brew trust thadchet/tap
+brew install --cask kubehack
+```
+
+Homebrew only installs from taps you trust, which is what the second line does.
+Update with `brew upgrade --cask kubehack`. It works on Apple silicon and Intel.
+
+Or install it yourself:
+
 1. Download [kubehack-macos.zip](https://github.com/Thadchet/kubehack/releases/latest/download/kubehack-macos.zip).
    It works on Apple silicon and Intel.
 2. Open the zip, and drag `kubehack.app` to your Applications folder.
@@ -207,7 +220,7 @@ GKE, and the standard image can't sign in to it. Use the `gke` image from the
 [Docker install steps](#docker).
 
 **macOS says the app is damaged or can't be opened.** Run the `xattr` command from
-the install steps again.
+the install steps again. Homebrew runs it for you.
 
 ## Security and privacy
 
