@@ -751,13 +751,53 @@ option {
   flex-direction: column;
   grid-column: 2;
   grid-row: 4;
-  height: 40vh;
-  min-height: 180px;
+  position: relative;
   margin: 0 8px 8px 0;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
+}
+
+/* A strip along the dock's top edge. It overlaps the border so it's easy to grab. */
+.dock-resize {
+  position: absolute;
+  z-index: 2;
+  top: -3px;
+  right: 12px;
+  left: 12px;
+  height: 8px;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.dock-resize::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 50%;
+  width: 36px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line);
+  transform: translateX(-50%);
+  transition: background-color 120ms;
+}
+
+.dock-resize:hover::after,
+.dock-resize:focus-visible::after,
+body[data-resizing="dock"] .dock-resize::after {
+  background: var(--muted);
+}
+
+.dock-resize:focus-visible {
+  outline: none;
+}
+
+/* Text under the pointer would otherwise get selected while dragging. */
+body[data-resizing="dock"] {
+  cursor: row-resize;
+  user-select: none;
 }
 
 .dock-tabs {
@@ -823,7 +863,8 @@ option {
   border-radius: 50%;
 }
 
-.edit-target .dock-dot {
+.edit-target .dock-dot,
+.forward-table .dock-dot {
   margin-right: 6px;
 }
 
