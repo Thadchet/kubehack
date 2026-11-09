@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   applyValues,
   dataKind,
+  displayValue,
   formatValues,
   keptKeys,
   parseObject,
@@ -73,6 +74,18 @@ describe("reading values", () => {
 
   it("treats a missing data field as empty", () => {
     expect(valuesFromYaml(JSON.stringify({ kind: "Secret" }), "secret").values).toEqual({});
+  });
+});
+
+describe("displaying values", () => {
+  it("shows text as stored", () => {
+    expect(displayValue("a: 1\nb: 2\n")).toBe("a: 1\nb: 2\n");
+  });
+
+  it("shows expanded JSON as YAML", () => {
+    expect(displayValue({ port: 80, hosts: ["a", "b"], on: "yes" })).toBe(
+      'port: 80\nhosts:\n  - a\n  - b\n"on": "yes"',
+    );
   });
 });
 

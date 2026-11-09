@@ -117,6 +117,15 @@ export function formatValues(values: Record<string, unknown>): string {
   return `${JSON.stringify(values, null, 2)}\n`;
 }
 
+// displayValue shows one key's value for reading: text as it is stored, and
+// expanded JSON as YAML.
+export function displayValue(value: unknown): string {
+  if (typeof value === "string") {
+    return value;
+  }
+  return stringify(value, yamlOptions).replace(/\n$/, "");
+}
+
 export function parseObject(yamlText: string): unknown {
   return parse(yamlText, yamlOptions);
 }

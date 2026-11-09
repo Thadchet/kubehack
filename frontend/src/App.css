@@ -726,6 +726,18 @@ option {
   overflow-wrap: anywhere;
 }
 
+.data-entry h4 {
+  margin: 14px 0 0;
+  font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.data-entry .yaml {
+  margin-top: 6px;
+}
+
 .yaml-inline {
   font-family: "Atkinson Hyperlegible Mono", ui-monospace, monospace;
   font-size: 12px;

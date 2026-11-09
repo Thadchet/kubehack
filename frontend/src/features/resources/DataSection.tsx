@@ -3,7 +3,7 @@ import { apiGet } from "../../api";
 import { toFailure } from "../actions/failure";
 import type { APIResource } from "../cluster/useCluster";
 import {
-  formatValues,
+  displayValue,
   readValues,
   valuesFromYaml,
   type BinaryValue,
@@ -32,9 +32,14 @@ export function BinaryNote({ values }: { values: BinaryValue[] }) {
 function Values({ data }: { data: DataValues }) {
   return (
     <>
-      <pre className="yaml" data-testid="data-values">
-        {formatValues(data.values)}
-      </pre>
+      <div data-testid="data-values">
+        {Object.entries(data.values).map(([key, value]) => (
+          <div className="data-entry" key={key}>
+            <h4>{key}</h4>
+            <pre className="yaml">{displayValue(value)}</pre>
+          </div>
+        ))}
+      </div>
       <BinaryNote values={data.binary} />
     </>
   );
