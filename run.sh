@@ -50,11 +50,18 @@ find_wails() {
   fi
 }
 
+# The version shown in About, such as 1.0.5, or 1.0.5-3-gabc1234 between tags.
+ldflags() {
+  local v
+  v=$(git describe --tags --always --dirty 2>/dev/null || echo dev)
+  echo "-X main.version=${v#v}"
+}
+
 run_app() {
   find_wails
   if code_changed; then
     echo "Building the app"
-    "$wails" build
+    "$wails" build -ldflags "$(ldflags)"
   fi
 
   # open starts apps through launchd, which doesn't pass on this shell's variables.
@@ -112,13 +119,13 @@ run_release() {
   mkdir -p releases
 
   # One build covers both Apple silicon and Intel Macs.
-  "$wails" build -clean -platform darwin/universal
+  "$wails" build -clean -platform darwin/universal -ldflags "$(ldflags)"
   sign_app
   rm -f releases/kubehack-macos.zip
   # ditto keeps the bundle's signature, which zip can break.
   ditto -c -k --keepParent "$app" releases/kubehack-macos.zip
 
-  "$wails" build -platform windows/amd64
+  "$wails" build -platform windows/amd64 -ldflags "$(ldflags)"
   rm -f releases/kubehack-windows-x64.zip
   (cd build/bin && zip -q ../../releases/kubehack-windows-x64.zip kubehack.exe)
 

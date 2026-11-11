@@ -8,10 +8,17 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed build/appicon.png
+var icon []byte
+
+// version is set at build time by run.sh from the latest git tag.
+var version = "dev"
 
 func main() {
 	// Create an instance of the app structure
@@ -24,6 +31,7 @@ func main() {
 		appMenu = menu.NewMenu()
 		appMenu.Append(menu.AppMenu())
 		appMenu.Append(menu.EditMenu())
+		appMenu.Append(menu.WindowMenu())
 	}
 
 	// Create application with options
@@ -32,6 +40,18 @@ func main() {
 		Menu:   appMenu,
 		Width:  1280,
 		Height: 800,
+		// Below this the sidebar and the dock crowd the resource table.
+		MinWidth:  900,
+		MinHeight: 560,
+		// Wails turns the zoom (green) button off when Mac is nil, so it must be
+		// set even though every field keeps its default.
+		Mac: &mac.Options{
+			About: &mac.AboutInfo{
+				Title:   "Kubehack " + version,
+				Message: "A Kubernetes desktop app.\ngithub.com/Thadchet/kubehack",
+				Icon:    icon,
+			},
+		},
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
