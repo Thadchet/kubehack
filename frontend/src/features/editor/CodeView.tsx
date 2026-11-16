@@ -1,9 +1,10 @@
 import { json } from "@codemirror/lang-json";
-import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { indentLess, indentMore } from "@codemirror/commands";
+import { getIndentUnit, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { yaml } from "@codemirror/lang-yaml";
 import { unifiedMergeView } from "@codemirror/merge";
-import { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import { EditorSelection, EditorState } from "@codemirror/state";
+import { type Command, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
@@ -31,6 +32,29 @@ const highlighting = syntaxHighlighting(
   ]),
 );
 
+// Tab inserts spaces up to the next indent stop, because YAML forbids tab
+// characters for indentation. With a selection it indents the lines instead.
+// basicSetup leaves Tab unbound so it moves focus; Escape then Tab still does.
+export const insertIndent: Command = (view) => {
+  const { state } = view;
+  if (state.readOnly) return false;
+  if (state.selection.ranges.some((r) => !r.empty)) return indentMore(view);
+  const unit = getIndentUnit(state);
+  view.dispatch(
+    state.changeByRange((range) => {
+      const column = range.head - state.doc.lineAt(range.head).from;
+      const spaces = " ".repeat(unit - (column % unit));
+      return {
+        changes: { from: range.head, insert: spaces },
+        range: EditorSelection.cursor(range.head + spaces.length),
+      };
+    }),
+  );
+  return true;
+};
+
+const tabKeys = keymap.of([{ key: "Tab", run: insertIndent, shift: indentLess }]);
+
 interface Props {
   value: string;
   // Omit for a read-only view.
@@ -55,6 +79,7 @@ export function CodeView({ value, onChange, original, language = "yaml" }: Props
         doc: value,
         extensions: [
           basicSetup,
+          ...(editable ? [tabKeys] : []),
           // Long values are the norm in JSON, where text can't span lines.
           ...(language === "json" ? [json(), EditorView.lineWrapping] : [yaml()]),
           theme,
