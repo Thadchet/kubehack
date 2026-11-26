@@ -95,7 +95,14 @@ jobs:
         if: github.ref_type == 'tag'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" releases/*.zip --verify-tag --generate-notes
+        # A release made by hand keeps its own zips, which the brew cask's sha256
+        # may already point at, so they are not replaced.
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "::notice::Release $GITHUB_REF_NAME already exists. Its downloads were left as they are."
+          else
+            gh release create "$GITHUB_REF_NAME" releases/*.zip --verify-tag --generate-notes
+          fi
 
   # main publishes the edge tags. Only a version tag moves latest, so that an
   # ordinary merge can't reach people who follow the README.
