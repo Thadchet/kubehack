@@ -1,5 +1,14 @@
 import { Cable, ScrollText, SquareTerminal, X } from "lucide-react";
-import { useEffect, useState, type KeyboardEvent, type PointerEvent } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type MouseEvent,
+  type PointerEvent,
+} from "react";
 import { contextColor } from "../cluster/contextColor";
 import { LogPanel } from "../logs/LogPanel";
 import { ForwardPanel } from "../portforward/ForwardPanel";
@@ -25,7 +34,7 @@ interface DockProps {
   tabs: DockTarget[];
   activeId?: string;
   onActivate: (id: string) => void;
-  onClose: (id: string) => void;
+  onClose: (ids: string[], focus?: string) => void;
   showForwards: boolean;
   portForwards: PortForwards;
 }
@@ -133,6 +142,21 @@ export function Dock({
   portForwards,
 }: DockProps) {
   const { height, onPointerDown, onKeyDown } = useDockHeight();
+  const [menu, setMenu] = useState<{ id: string; x: number; y: number }>();
+  const dismissMenu = useCallback(() => setMenu(undefined), []);
+  const ids = [...(showForwards ? [forwardsTab] : []), ...tabs.map((tab) => tab.id)];
+
+  const openMenu = (id: string) => (event: MouseEvent<HTMLElement>) => {
+    event.preventDefault();
+    // The keyboard's menu key reports no pointer position, so open under the tab.
+    let { clientX: x, clientY: y } = event;
+    if (x === 0 && y === 0) {
+      const rect = event.currentTarget.getBoundingClientRect();
+      x = rect.left;
+      y = rect.bottom;
+    }
+    setMenu({ id, x, y });
+  };
   return (
     <section
       className="dock"
@@ -154,7 +178,11 @@ export function Dock({
       />
       <div className="dock-tabs" role="tablist">
         {showForwards && (
-          <div className="dock-tab" data-active={activeId === forwardsTab}>
+          <div
+            className="dock-tab"
+            data-active={activeId === forwardsTab}
+            onContextMenu={openMenu(forwardsTab)}
+          >
             <button
               type="button"
               role="tab"
@@ -168,14 +196,19 @@ export function Dock({
               type="button"
               className="quiet"
               aria-label="Close port forwards"
-              onClick={() => onClose(forwardsTab)}
+              onClick={() => onClose([forwardsTab])}
             >
               <X size={14} aria-hidden="true" />
             </button>
           </div>
         )}
         {tabs.map((tab) => (
-          <div key={tab.id} className="dock-tab" data-active={tab.id === activeId}>
+          <div
+            key={tab.id}
+            className="dock-tab"
+            data-active={tab.id === activeId}
+            onContextMenu={openMenu(tab.id)}
+          >
             <button
               type="button"
               role="tab"
@@ -201,7 +234,7 @@ export function Dock({
               type="button"
               className="quiet"
               aria-label={`Close ${tab.kind === "terminal" ? "shell" : "logs"} for ${tab.pod}`}
-              onClick={() => onClose(tab.id)}
+              onClick={() => onClose([tab.id])}
             >
               <X size={14} aria-hidden="true" />
             </button>
@@ -218,7 +251,112 @@ export function Dock({
           <LogPanel key={tab.id} target={tab} active={tab.id === activeId} />
         ),
       )}
+      {menu && (
+        <TabMenu
+          x={menu.x}
+          y={menu.y}
+          id={menu.id}
+          ids={ids}
+          onClose={onClose}
+          onDismiss={dismissMenu}
+        />
+      )}
     </section>
+  );
+}
+
+interface TabMenuProps {
+  x: number;
+  y: number;
+  id: string;
+  ids: string[];
+  onClose: (ids: string[], focus?: string) => void;
+  onDismiss: () => void;
+}
+
+function TabMenu({ x, y, id, ids, onClose, onDismiss }: TabMenuProps) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState({ left: x, top: y });
+  const others = ids.filter((other) => other !== id);
+  const right = ids.slice(ids.indexOf(id) + 1);
+
+  const items = [
+    { label: "Close", ids: [id] },
+    { label: "Close others", ids: others, focus: id },
+    { label: "Close to the right", ids: right, focus: id },
+    { label: "Close all", ids },
+  ];
+
+  // Keep the menu inside the window.
+  useLayoutEffect(() => {
+    const rect = ref.current?.getBoundingClientRect();
+    if (rect) {
+      setPosition({
+        left: Math.max(4, Math.min(x, window.innerWidth - rect.width - 4)),
+        top: Math.max(4, Math.min(y, window.innerHeight - rect.height - 4)),
+      });
+    }
+    ref.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [x, y]);
+
+  useEffect(() => {
+    const away = (event: globalThis.PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) {
+        onDismiss();
+      }
+    };
+    window.addEventListener("pointerdown", away, true);
+    window.addEventListener("resize", onDismiss);
+    window.addEventListener("blur", onDismiss);
+    return () => {
+      window.removeEventListener("pointerdown", away, true);
+      window.removeEventListener("resize", onDismiss);
+      window.removeEventListener("blur", onDismiss);
+    };
+  }, [onDismiss]);
+
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Escape" || event.key === "Tab") {
+      event.preventDefault();
+      onDismiss();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") {
+      return;
+    }
+    event.preventDefault();
+    const buttons = [
+      ...(ref.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []),
+    ];
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+    const step = event.key === "ArrowDown" ? 1 : -1;
+    buttons[(at + step + buttons.length) % buttons.length]?.focus();
+  };
+
+  return (
+    <div
+      ref={ref}
+      className="dock-menu"
+      role="menu"
+      aria-label="Tab actions"
+      style={position}
+      onKeyDown={onKeyDown}
+    >
+      {items.map((item) => (
+        <button
+          key={item.label}
+          type="button"
+          role="menuitem"
+          disabled={item.ids.length === 0}
+          onClick={() => {
+            onDismiss();
+            onClose(item.ids, item.focus);
+          }}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
   );
 }
 

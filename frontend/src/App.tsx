@@ -64,22 +64,33 @@ export default function App() {
     setActiveTab(forwardsTab);
   };
 
-  // Closing the tab only hides the list. The forwards keep running.
-  const closeTab = (id: string) => {
-    if (id === forwardsTab) {
+  // Closing the forwards tab only hides the list. The forwards keep running.
+  // `focus` names a tab that stays open and becomes active.
+  const closeTabs = (ids: string[], focus?: string) => {
+    const closing = new Set(ids);
+    const keepForwards = showForwards && !closing.has(forwardsTab);
+    if (closing.has(forwardsTab)) {
       setShowForwards(false);
-      if (activeTab === id) {
-        setActiveTab(dockTabs[0]?.id);
-      }
+    }
+    const remaining = dockTabs.filter((tab) => !closing.has(tab.id));
+    setDockTabs(remaining);
+    if (focus && !closing.has(focus)) {
+      setActiveTab(focus);
       return;
     }
-    const index = dockTabs.findIndex((tab) => tab.id === id);
-    const remaining = dockTabs.filter((tab) => tab.id !== id);
-    setDockTabs(remaining);
-    if (activeTab === id) {
-      const next = remaining[Math.min(index, remaining.length - 1)]?.id;
-      setActiveTab(next ?? (showForwards ? forwardsTab : undefined));
+    if (!activeTab || !closing.has(activeTab)) {
+      return;
     }
+    if (activeTab === forwardsTab) {
+      setActiveTab(remaining[0]?.id);
+      return;
+    }
+    // Prefer the nearest open tab to the right, then to the left.
+    const index = dockTabs.findIndex((tab) => tab.id === activeTab);
+    const open = (tab: DockTarget) => !closing.has(tab.id);
+    const next =
+      dockTabs.slice(index + 1).find(open) ?? dockTabs.slice(0, index).reverse().find(open);
+    setActiveTab(next?.id ?? (keepForwards ? forwardsTab : undefined));
   };
 
   const forwardCount = portForwards.forwards.length;
@@ -221,7 +232,7 @@ export default function App() {
           tabs={dockTabs}
           activeId={activeTab}
           onActivate={setActiveTab}
-          onClose={closeTab}
+          onClose={closeTabs}
           showForwards={showForwards}
           portForwards={portForwards}
         />
